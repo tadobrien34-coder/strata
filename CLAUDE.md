@@ -63,7 +63,7 @@ Reference points: Helix Jump, Doodle Jump (inverted), Downwell.
 ### Current state
 
 Single file, `index.html`. Canvas 2D, no dependencies, no build step.
-Roughly 450 lines. Playable and — per Tad, unprompted — actually fun.
+Roughly 340 lines. Playable and — per Tad, unprompted — actually fun.
 
 Implemented:
 - Procedural strata streaming; rows generate ahead of camera, cull behind crusher
@@ -74,6 +74,13 @@ Implemented:
 - Coins, debris particles, screen shake, player trail
 - `navigator.vibrate` haptics, deliberately asymmetric
 - Rewarded-continue mock on the death screen, one per run
+- Audio (added 14 Sep 2026): Web Audio synthesis, no files. Coin blip that
+  climbs a semitone per coin in a streak (capped at 8, reset by a ledge hit),
+  ledge thud (noise + sine), death crunch (noise + descending saw), revive
+  rise, and a low crusher drone that swells over the last ~560px of slack.
+  Mute toggle bottom-right, persisted in `localStorage` under `strata.mute`.
+  AudioContext is created on the first button tap (iOS requirement).
+  Verified in a desktop browser only — not yet heard on a phone.
 
 ### Tuning constants — treat as load-bearing
 
@@ -100,8 +107,9 @@ change it alone, and playtest every change on a phone.
 ## 3. Environment
 
 - **Windows 11.** Project at `C:\Users\tadob\OneDrive\Desktop\strata`
-- Python installed via winget; serve with `python -m http.server 8000`
-  (plain `python`, not `python3` — the `python3` alias hits a Store stub)
+- Python installed via winget but **not on PATH** — both `python` and
+  `python3` hit the Store stub. Use the full path:
+  `C:\Users\tadob\AppData\Local\Programs\Python\Python312\python.exe -m http.server 8000`
 - **No Node installed yet.** `winget install OpenJS.NodeJS.LTS` when needed
 - Git initialised locally, commits exist
 - GitHub remote is **wrong** — points at `tadobrien34`, real username is
@@ -268,7 +276,9 @@ app-store compliance, all of which his other venture needs.
 
 Don't let anyone call the current build a product.
 
-- No audio at all
+- Audio is untested on iOS. Two known iOS behaviours to check: the ring/silent
+  switch mutes Web Audio entirely, and the context needs a real tap to start
+  (handled, but confirm on device)
 - No persistence — best score dies on refresh
 - No difficulty tuning against real players; gap width and crusher speed are
   guesses and need remote config plus an A/B test
