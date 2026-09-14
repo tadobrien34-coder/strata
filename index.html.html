@@ -1,0 +1,285 @@
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Strata — descent prototype</title>
+<style>
+  :root{
+    --ink:#0A0C14;
+    --bone:#EAE6DA;
+    --coin:#F2C14E;
+    --crush:#E5484D;
+    --dim:rgba(234,230,218,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--ink);overflow:hidden;
+    font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+    color:var(--bone);-webkit-user-select:none;user-select:none;touch-action:none}
+  #stage{position:relative;width:100%;height:100%;display:grid;place-items:center}
+  #frame{position:relative;height:100%;aspect-ratio:9/16;max-width:100%;overflow:hidden;
+    box-shadow:0 0 0 1px rgba(234,230,218,.12)}
+  canvas{display:block;width:100%;height:100%}
+
+  .hud{position:absolute;inset:0;pointer-events:none}
+  .depth{position:absolute;top:18px;left:18px;line-height:.9}
+  .depth b{display:block;font-size:44px;font-weight:600;letter-spacing:-.03em;
+    font-variant-numeric:tabular-nums}
+  .depth span{font-size:12px;letter-spacing:.06em;color:var(--dim)}
+  .purse{position:absolute;top:22px;right:18px;display:flex;align-items:center;gap:7px;
+    font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+  .purse i{width:13px;height:13px;border-radius:50%;background:var(--coin);
+    box-shadow:inset -3px -3px 0 rgba(0,0,0,.18);display:block}
+  .bandname{position:absolute;top:78px;left:18px;font-size:12px;letter-spacing:.1em;
+    color:var(--dim);transition:opacity .4s}
+
+  .veil{position:absolute;inset:0;display:grid;place-items:center;pointer-events:auto;
+    background:rgba(10,12,20,.82);backdrop-filter:blur(7px);padding:28px;text-align:center}
+  .veil.gone{display:none}
+  .veil h1{font-size:clamp(38px,13vw,68px);font-weight:600;letter-spacing:-.045em;line-height:.92}
+  .veil h2{font-size:34px;font-weight:600;letter-spacing:-.03em}
+  .veil p{margin-top:12px;font-size:15px;color:var(--dim);max-width:30ch;line-height:1.5}
+  .stat{margin-top:22px;display:flex;gap:26px;justify-content:center}
+  .stat div{font-size:11px;letter-spacing:.08em;color:var(--dim)}
+  .stat b{display:block;font-size:28px;font-weight:600;color:var(--bone);
+    letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-bottom:3px}
+  button{font:inherit;font-size:16px;font-weight:600;color:var(--ink);background:var(--bone);
+    border:0;border-radius:999px;padding:15px 30px;margin-top:26px;cursor:pointer;
+    transition:transform .12s ease}
+  button:active{transform:scale(.96)}
+  button.ghost{background:transparent;color:var(--bone);box-shadow:inset 0 0 0 1px rgba(234,230,218,.3);
+    margin-top:12px;font-weight:500}
+  button.gold{background:var(--coin)}
+  button:focus-visible{outline:2px solid var(--coin);outline-offset:3px}
+  .hint{margin-top:20px;font-size:12px;color:var(--dim)}
+  @media (prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+
+<div id="stage"><div id="frame">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="depth"><b id="dep">0</b><span>metres down</span></div>
+    <div class="purse"><i></i><span id="coins">0</span></div>
+    <div class="bandname" id="band"></div>
+  </div>
+
+  <div class="veil" id="start">
+    <div>
+      <h1>Strata</h1>
+      <p>Steer as you fall. Clip a ledge and you stall — and the crusher above never stalls.</p>
+      <button id="go">Start falling</button>
+      <div class="hint">Drag anywhere, or use ← →</div>
+    </div>
+  </div>
+
+  <div class="veil gone" id="over">
+    <div>
+      <h2 id="overTitle">Crushed</h2>
+      <div class="stat">
+        <div><b id="fDep">0</b>METRES</div>
+        <div><b id="fCoin">0</b>COINS</div>
+        <div><b id="fBest">0</b>BEST</div>
+      </div>
+      <button class="gold" id="revive">Keep falling — watch ad</button>
+      <button class="ghost" id="again">Drop again</button>
+    </div>
+  </div>
+</div></div>
+
+<script>
+const cv=document.getElementById('c'),cx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function fit(){const r=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2.5);
+  W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;cx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',fit);
+
+// ── strata: each band is a depth range with its own palette ──────────────
+const BANDS=[
+ {at:0,   name:'TOPSOIL',   bg:'#1B2419', rock:'#3E4B33', grit:'#5D6B48'},
+ {at:220, name:'LIMESTONE', bg:'#131C26', rock:'#2E4356', grit:'#48637A'},
+ {at:480, name:'GEODE',     bg:'#191428', rock:'#3C2E60', grit:'#6A4FA3'},
+ {at:760, name:'MAGMA',     bg:'#210F12', rock:'#5A2224', grit:'#9C3A2C'},
+ {at:1080,name:'THE CORE',  bg:'#0C0A0E', rock:'#2A2230', grit:'#C4542F'},
+];
+const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const mix=(a,b,t)=>{const A=hex(a),B=hex(b);
+  return `rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')})`;};
+function palette(m){
+  let i=0; while(i<BANDS.length-1 && m>=BANDS[i+1].at) i++;
+  const a=BANDS[i], b=BANDS[Math.min(i+1,BANDS.length-1)];
+  const t=b.at>a.at?Math.min(1,Math.max(0,(m-a.at)/(b.at-a.at))):0;
+  return {name:a.name, bg:mix(a.bg,b.bg,t), rock:mix(a.rock,b.rock,t), grit:mix(a.grit,b.grit,t)};
+}
+
+// ── tuning ───────────────────────────────────────────────────────────────
+const PPM=6;            // pixels per metre
+const ROW=190;          // vertical spacing of ledges
+const GRAV=1500, VMAX=760, STEER=17;
+const R=13;             // player radius
+
+let P, rows, coinsArr, bits, crusherY, depth, coins, best=0, shake=0, running=false, revived=false;
+let targetX=null, keyL=false, keyR=false, lastT=0;
+
+function gapWidth(m){ return Math.max(66, 152 - m*0.055); }   // narrows with depth
+function crusherSpeed(m){ return 330 + m*0.34; }              // VMAX is 760 — slack for one mistake
+
+function reset(){
+  P={x:W/2,y:0,vx:0,vy:0,stun:0};
+  rows=[];coinsArr=[];bits=[];
+  crusherY=-520;depth=0;coins=0;revived=false;shake=0;
+  for(let i=1;i<10;i++) build(i*ROW);
+}
+function build(y){
+  const m=y/PPM, gw=gapWidth(m), edge=gw/2+16;
+  const gx=edge+Math.random()*(W-edge*2);
+  rows.push({y,gx,gw,hit:false});
+  // coins sit in the gap and just past it — reward for threading cleanly
+  const n=1+(Math.random()<.45?1:0)+(m>400&&Math.random()<.3?1:0);
+  for(let i=0;i<n;i++) coinsArr.push({x:gx+(Math.random()-.5)*gw*.55,y:y+22+i*26,got:false,t:Math.random()*6});
+}
+
+// ── haptics: iOS Safari ignores this entirely. See QA notes. ─────────────
+const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
+
+function input(){
+  addEventListener('keydown',e=>{if(e.key==='ArrowLeft')keyL=true;if(e.key==='ArrowRight')keyR=true;});
+  addEventListener('keyup',e=>{if(e.key==='ArrowLeft')keyL=false;if(e.key==='ArrowRight')keyR=false;});
+  const set=e=>{const r=cv.getBoundingClientRect();targetX=(e.touches?e.touches[0].clientX:e.clientX)-r.left;};
+  cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);set(e)});
+  cv.addEventListener('pointermove',e=>{if(e.pressure>0||e.buttons)set(e)});
+  cv.addEventListener('pointerup',()=>targetX=null);
+}
+
+function step(dt){
+  // steer
+  if(targetX!==null) P.x+=(targetX-P.x)*Math.min(1,dt*STEER);
+  if(keyL) P.x-=430*dt; if(keyR) P.x+=430*dt;
+  P.x=Math.max(R,Math.min(W-R,P.x));
+
+  // fall
+  P.vy=Math.min(VMAX,P.vy+GRAV*dt);
+  if(P.stun>0){P.stun-=dt;P.vy=Math.min(P.vy,110);}
+  P.y+=P.vy*dt;
+  depth=Math.max(depth,P.y/PPM);
+
+  crusherY+=crusherSpeed(depth)*dt;
+  if(P.y-crusherY<R*1.4) return die();
+
+  // ledges
+  for(const r of rows){
+    if(P.y+R>r.y && P.y-R<r.y+16 && !r.hit){
+      const inGap=P.x>r.gx-r.gw/2+R*.5 && P.x<r.gx+r.gw/2-R*.5;
+      if(!inGap){
+        r.hit=true;P.y=r.y-R;P.vy=0;P.stun=.42;shake=13;
+        buzz([18,26,18]);
+        for(let i=0;i<9;i++)bits.push({x:P.x,y:P.y+R,vx:(Math.random()-.5)*230,vy:-Math.random()*170,l:.5,c:'rock'});
+      }
+    }
+  }
+  // coins
+  for(const c of coinsArr){
+    if(c.got)continue; c.t+=dt*4;
+    if(Math.hypot(c.x-P.x,c.y-P.y)<R+13){
+      c.got=true;coins++;buzz(9);
+      for(let i=0;i<7;i++)bits.push({x:c.x,y:c.y,vx:(Math.random()-.5)*200,vy:(Math.random()-.5)*200,l:.45,c:'coin'});
+    }
+  }
+  for(const b of bits){b.l-=dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.vy+=900*dt;}
+  bits=bits.filter(b=>b.l>0);
+
+  // stream in / cull
+  const deepest=rows[rows.length-1].y;
+  if(deepest-P.y<H*2.2) build(deepest+ROW);
+  rows=rows.filter(r=>r.y>crusherY-260);
+  coinsArr=coinsArr.filter(c=>!c.got&&c.y>crusherY-260);
+  if(shake>0)shake*=.86;
+}
+
+function die(){
+  running=false;buzz([40,60,110]);
+  best=Math.max(best,Math.round(depth));
+  fDep.textContent=Math.round(depth);fCoin.textContent=coins;fBest.textContent=best;
+  revive.style.display=revived?'none':'';
+  overTitle.textContent=revived?'Crushed again':'Crushed';
+  over.classList.remove('gone');
+}
+
+function draw(){
+  const pal=palette(depth), camY=P.y-H*0.38;
+  const sx=(Math.random()-.5)*shake, sy=(Math.random()-.5)*shake;
+  cx.save();cx.translate(sx,sy);
+  cx.fillStyle=pal.bg;cx.fillRect(-20,-20,W+40,H+40);
+
+  // parallax grit veins
+  cx.strokeStyle=pal.rock;cx.globalAlpha=.5;cx.lineWidth=1;
+  for(let i=0;i<16;i++){
+    const y=((i*137 - camY*0.35)%(H+160))-80, w=30+((i*53)%90);
+    cx.beginPath();cx.moveTo((i*97)%W,y);cx.lineTo((i*97)%W+w,y+9);cx.stroke();
+  }
+  cx.globalAlpha=1;
+
+  // ledges
+  for(const r of rows){
+    const y=r.y-camY; if(y<-40||y>H+40)continue;
+    cx.fillStyle=pal.rock;
+    cx.fillRect(0,y,r.gx-r.gw/2,15);
+    cx.fillRect(r.gx+r.gw/2,y,W-(r.gx+r.gw/2),15);
+    cx.fillStyle=pal.grit;
+    cx.fillRect(0,y,r.gx-r.gw/2,3);
+    cx.fillRect(r.gx+r.gw/2,y,W-(r.gx+r.gw/2),3);
+  }
+
+  // coins
+  for(const c of coinsArr){
+    const y=c.y-camY; if(y<-30||y>H+30)continue;
+    const w=Math.abs(Math.cos(c.t))*9+2.5;
+    cx.fillStyle='#F2C14E';cx.beginPath();cx.ellipse(c.x,y,w,9.5,0,0,7);cx.fill();
+    cx.fillStyle='rgba(0,0,0,.16)';cx.beginPath();cx.ellipse(c.x,y+1.5,w*.5,5,0,0,7);cx.fill();
+  }
+
+  // debris
+  for(const b of bits){cx.globalAlpha=Math.max(0,b.l*2);
+    cx.fillStyle=b.c==='coin'?'#F2C14E':pal.grit;cx.fillRect(b.x,b.y-camY,3,3);}
+  cx.globalAlpha=1;
+
+  // player + trail
+  const py=P.y-camY;
+  const g=cx.createLinearGradient(0,py-46,0,py);
+  g.addColorStop(0,'rgba(234,230,218,0)');g.addColorStop(1,'rgba(234,230,218,.28)');
+  cx.fillStyle=g;cx.fillRect(P.x-4,py-46,8,46);
+  cx.fillStyle='#EAE6DA';cx.beginPath();cx.arc(P.x,py,R,0,7);cx.fill();
+  cx.fillStyle=P.stun>0?'#E5484D':pal.bg;cx.beginPath();cx.arc(P.x,py-2,4.5,0,7);cx.fill();
+
+  // crusher
+  const cy=crusherY-camY;
+  if(cy>-200){
+    const cg=cx.createLinearGradient(0,cy-170,0,cy);
+    cg.addColorStop(0,'rgba(10,12,20,.98)');cg.addColorStop(1,'rgba(229,72,77,.9)');
+    cx.fillStyle=cg;cx.fillRect(0,cy-170,W,170);
+    cx.fillStyle='#E5484D';
+    for(let i=0;i<W/22;i++){cx.beginPath();cx.moveTo(i*22,cy);cx.lineTo(i*22+11,cy+15);cx.lineTo(i*22+22,cy);cx.fill();}
+  }
+  cx.restore();
+
+  dep.textContent=Math.round(depth);
+  coins_.textContent=coins;
+  band.textContent=pal.name;
+}
+
+function loop(t){
+  const dt=Math.min(.033,(t-lastT)/1000||0);lastT=t;
+  if(running)step(dt);
+  draw();requestAnimationFrame(loop);
+}
+
+const dep=document.getElementById('dep'),coins_=document.getElementById('coins'),
+      band=document.getElementById('band'),over=document.getElementById('over'),
+      fDep=document.getElementById('fDep'),fCoin=document.getElementById('fCoin'),
+      fBest=document.getElementById('fBest'),revive=document.getElementById('revive'),
+      overTitle=document.getElementById('overTitle');
+
+document.getElementById('go').onclick=()=>{fit();reset();document.getElementById('start').classList.add('gone');running=true;};
+document.getElementById('again').onclick=()=>{fit();reset();over.classList.add('gone');running=true;};
+revive.onclick=()=>{ // stand-in for a rewarded-video continue
+  revived=true;crusherY=P.y-620;P.vy=0;P.stun=0;
+  over.classList.add('gone');running=true;buzz([12,40,12]);
+};
+
+fit();input();reset();requestAnimationFrame(loop);
+</script>
