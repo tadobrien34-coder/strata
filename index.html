@@ -68,8 +68,9 @@
     <div>
       <h1>Strata</h1>
       <p>Steer as you fall. Clip a ledge and you stall — and the crusher above never stalls.</p>
+      <div class="stat"><div><b id="sBest">0</b>BEST</div><div><b id="sBank">0</b>BANK</div></div>
       <button id="go">Start falling</button>
-      <div class="hint">Drag anywhere, or use ← →</div>
+      <div class="hint">Drag anywhere, or use ← →. Space to start.</div>
     </div>
   </div>
 
@@ -80,6 +81,7 @@
         <div><b id="fDep">0</b>METRES</div>
         <div><b id="fCoin">0</b>COINS</div>
         <div><b id="fBest">0</b>BEST</div>
+        <div><b id="fBank">0</b>BANK</div>
       </div>
       <button class="gold" id="revive">Keep falling — watch ad</button>
       <button class="ghost" id="again">Drop again</button>
@@ -114,11 +116,16 @@ function palette(m){
 
 // ── tuning ───────────────────────────────────────────────────────────────
 const PPM=6;            // pixels per metre
-const ROW=190;          // vertical spacing of ledges
-const GRAV=1500, VMAX=760, STEER=17;
+const ROW=215;          // vertical spacing of ledges
+const GRAV=1500, VMAX=760, STEER=22;
+const KEYSPD=520;       // px/s for arrow keys
 const R=13;             // player radius
 
-let P, rows, coinsArr, bits, crusherY, depth, coins, best=0, shake=0, running=false, revived=false;
+let P, rows, coinsArr, bits, crusherY, depth, coins, shake=0, running=false, revived=false;
+// persisted: best depth and the coin bank (cosmetics currency — never buys power, see CLAUDE.md §5)
+const load=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:+v}catch(e){return d}};
+const save=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+let best=load('strata.best',0), bank=load('strata.bank',0), banked=0;
 let targetX=null, keyL=false, keyR=false, lastT=0;
 
 function gapWidth(m){ return Math.max(66, 152 - m*0.055); }   // narrows with depth
@@ -127,7 +134,7 @@ function crusherSpeed(m){ return 330 + m*0.34; }              // VMAX is 760 —
 function reset(){
   P={x:W/2,y:0,vx:0,vy:0,stun:0};
   rows=[];coinsArr=[];bits=[];
-  crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;
+  crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;banked=0;
   for(let i=1;i<10;i++) build(i*ROW);
 }
 function build(y){
@@ -173,8 +180,18 @@ function noise(cut,dur,vol){
   s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur);
 }
 const sfx={
-  // bright blip; each coin in a streak steps up a semitone, capped at 8, reset by a ledge hit
-  coin(){ if(!AC)return; const f=1046*Math.pow(2,Math.min(streak,8)/12); tone('triangle',f,f*1.5,.09,.16); },
+  // two-note ring, B5 then E6, the second held. Streak nudges the whole thing up a
+  // semitone per coin (cap 6) so a clean run climbs; a ledge hit resets it.
+  coin(){ if(!AC)return;
+    const k=Math.pow(2,Math.min(streak,6)/12), t=AC.currentTime;
+    for(const [type,vol] of [['square',.05],['sine',.14]]){
+      const o=AC.createOscillator(), g=AC.createGain(); o.type=type;
+      o.frequency.setValueAtTime(988*k,t); o.frequency.setValueAtTime(1319*k,t+.07);
+      g.gain.setValueAtTime(vol,t); g.gain.setValueAtTime(vol,t+.07);
+      g.gain.exponentialRampToValueAtTime(.001,t+.38);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t+.38);
+    }
+  },
   thud(){ if(!AC)return; noise(420,.14,.5); tone('sine',95,42,.16,.45); },
   death(){ if(!AC)return; noise(900,.5,.6); tone('sawtooth',300,44,.65,.3);
     drone.gain.cancelScheduledValues(AC.currentTime); drone.gain.setTargetAtTime(0,AC.currentTime,.05); },
@@ -199,7 +216,7 @@ function input(){
 function step(dt){
   // steer
   if(targetX!==null) P.x+=(targetX-P.x)*Math.min(1,dt*STEER);
-  if(keyL) P.x-=430*dt; if(keyR) P.x+=430*dt;
+  if(keyL) P.x-=KEYSPD*dt; if(keyR) P.x+=KEYSPD*dt;
   P.x=Math.max(R,Math.min(W-R,P.x));
 
   // fall
@@ -245,8 +262,9 @@ function step(dt){
 
 function die(){
   running=false;buzz([40,60,110]);sfx.death();
-  best=Math.max(best,Math.round(depth));
-  fDep.textContent=Math.round(depth);fCoin.textContent=coins;fBest.textContent=best;
+  best=Math.max(best,Math.round(depth)); save('strata.best',best);
+  bank+=coins-banked; banked=coins; save('strata.bank',bank);   // banked guards the revive double-count
+  fDep.textContent=Math.round(depth);fCoin.textContent=coins;fBest.textContent=best;fBank.textContent=bank;
   revive.style.display=revived?'none':'';
   overTitle.textContent=revived?'Crushed again':'Crushed';
   over.classList.remove('gone');
@@ -324,16 +342,23 @@ const dep=document.getElementById('dep'),coins_=document.getElementById('coins')
       band=document.getElementById('band'),over=document.getElementById('over'),
       fDep=document.getElementById('fDep'),fCoin=document.getElementById('fCoin'),
       fBest=document.getElementById('fBest'),revive=document.getElementById('revive'),
-      overTitle=document.getElementById('overTitle'),muteBtn=document.getElementById('muteBtn');
+      overTitle=document.getElementById('overTitle'),muteBtn=document.getElementById('muteBtn'),
+      fBank=document.getElementById('fBank'),sBest=document.getElementById('sBest'),sBank=document.getElementById('sBank'),
+      startVeil=document.getElementById('start'),goBtn=document.getElementById('go'),againBtn=document.getElementById('again');
 
-document.getElementById('go').onclick=()=>{audioInit();fit();reset();document.getElementById('start').classList.add('gone');running=true;};
-document.getElementById('again').onclick=()=>{audioInit();fit();reset();over.classList.add('gone');running=true;};
+goBtn.onclick=()=>{audioInit();fit();reset();startVeil.classList.add('gone');running=true;};
+againBtn.onclick=()=>{audioInit();fit();reset();over.classList.add('gone');running=true;};
+addEventListener('keydown',e=>{
+  if(e.key!==' '&&e.key!=='Enter')return; e.preventDefault();
+  if(!startVeil.classList.contains('gone')) goBtn.click();
+  else if(!over.classList.contains('gone')) againBtn.click();
+});
 revive.onclick=()=>{ // stand-in for a rewarded-video continue
   audioInit();revived=true;crusherY=P.y-620;P.vy=0;P.stun=0;
   over.classList.add('gone');running=true;buzz([12,40,12]);sfx.revive();
 };
 muteBtn.onclick=()=>{audioInit();setMute(!muted);};
-setMute(muted);
+setMute(muted);sBest.textContent=best;sBank.textContent=bank;
 
 fit();input();reset();requestAnimationFrame(loop);
 </script>

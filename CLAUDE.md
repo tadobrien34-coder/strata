@@ -80,16 +80,20 @@ Implemented:
   rise, and a low crusher drone that swells over the last ~560px of slack.
   Mute toggle bottom-right, persisted in `localStorage` under `strata.mute`.
   AudioContext is created on the first button tap (iOS requirement).
-  Verified in a desktop browser only — not yet heard on a phone.
+  Coin sound is a two-note ring (B5 → E6) since 18 Sep; the original swept
+  blip was rejected as too blippy. Confirmed working on Tad's iPhone.
+- Space or Enter starts and restarts
+- Coin bank: total coins across runs, shown on the start and death screens
 
 ### Tuning constants — treat as load-bearing
 
 ```
 PPM   = 6      pixels per metre
-ROW   = 190    vertical spacing of ledges
+ROW   = 215    vertical spacing of ledges   (was 190; raised 18 Sep on feel)
 GRAV  = 1500
 VMAX  = 760    terminal velocity
-STEER = 17     lerp rate toward pointer
+STEER = 22     lerp rate toward pointer     (was 17; raised 18 Sep on feel)
+KEYSPD= 520    px/s for arrow keys         (was 430)
 R     = 13     player radius
 
 gapWidth(m)     = max(66, 152 - m*0.055)
@@ -148,10 +152,9 @@ borrowed device before committing to a native rewrite.
    his device.
 2. **Apple Developer enrollment** ($99/yr) in parallel — approval takes time
    and gates everything.
-3. **Persistence** — best depth surviving a refresh. Ten minutes of work, and
-   it's what creates the beat-my-number motive. Note this was impossible in
-   the claude.ai artifact environment, which is part of why the project moved
-   local.
+3. **Persistence** — done 18 Sep. Best depth and a coin bank survive refresh.
+   Bank is the cosmetics currency for the shop; it adds the delta on a
+   revived death, not the full run again.
 4. **Capacitor wrap + native haptics.** Capacitor's Haptics plugin calls
    Apple's real feedback generators, so the existing canvas game gets genuine
    iOS haptics without a Unity rewrite.
@@ -276,10 +279,11 @@ app-store compliance, all of which his other venture needs.
 
 Don't let anyone call the current build a product.
 
-- Audio is untested on iOS. Two known iOS behaviours to check: the ring/silent
-  switch mutes Web Audio entirely, and the context needs a real tap to start
-  (handled, but confirm on device)
-- No persistence — best score dies on refresh
+- iOS silent switch mutes Web Audio entirely. No in-game workaround; worth a
+  one-line hint if players report no sound.
+- Persistence is `localStorage` only (`strata.best`, `strata.bank`, `strata.mute`).
+  Fine for the web build; the Capacitor wrap should keep working since the
+  WebView has localStorage, but confirm it survives an app update.
 - No difficulty tuning against real players; gap width and crusher speed are
   guesses and need remote config plus an A/B test
 - No accessibility pass — no colourblind check on the magma band, no
