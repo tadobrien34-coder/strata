@@ -103,15 +103,26 @@ GRAV  = 950    (was 1500; ~0.7s from a stall back to terminal)
 STEER = 28     lerp rate toward pointer     (was 17)
 KEYSPD= 680    px/s for arrow keys         (was 430)
 R     = 13     player radius
-GAPVAR= .32    per-row gap jitter, ±32%
+GAPVAR= .25    per-row gap jitter, ±25%
+REACT = .2     reaction allowance, seconds
+HSPEED= 520    px/s a thumb covers; below KEYSPD so keyboard has leeway
 
 vmax(m)         = min(780, 470 + m*0.3)          terminal velocity
 rowGap(m)       = 340                            ledge spacing, flat (Tad: speed is the ramp, not density)
-gapWidth(m)     = max(72, 176 - m*0.05) × (1 ± GAPVAR)
+gapWidth(m)     = max(100, 190 - m*0.05) × (1 ± GAPVAR)   (ball is 26px; gaps sit ≥40px off the walls)
+reach(m)        = max(50, (rowGap/vmax − REACT) × HSPEED)   max sideways shift between consecutive gaps
 crusherSpeed(m) = vmax(m) × min(.9, .55 + m*0.0004)
 ```
 
 Reaction time per ledge (rowGap/vmax): 0.72s at the top, 0.44s from ~1030m.
+
+**Every ledge is physically possible by construction.** Tad's rule, 18 Sep:
+"every ledge should be possible, with a tiny bit of leeway." `reach(m)`
+limits how far sideways the next gap may sit from the previous one — 272px
+at the top, ~125px deep — so the gap *drifts* rather than jumps. Verified
+with a simulated thumb (0.2s reaction, 520px/s): zero stalls to 2500m; a
+400px/s thumb also zero; 0.3s reaction dies around 2400m. The sacrifice is
+horizontal variety deep down, which is the right trade.
 
 **The crusher ratio is the game.** Crusher speed is a *fraction* of terminal
 velocity, 55% at the top rising to 90% by ~875m (ratio unchanged 18 Sep pm; the

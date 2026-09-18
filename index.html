@@ -194,21 +194,27 @@ let targetX=null, keyL=false, keyR=false, lastT=0;
 function vmax(m){ return Math.min(780, 470 + m*0.3); }          // terminal velocity: 470 px/s at the top, 780 by ~1030m
 function rowGap(m){ return 340; }                               // ledge spacing is flat; speed alone carries the ramp
                                                                 // reaction time per ledge (rowGap/vmax): 0.72s → 0.44s
-function gapWidth(m){ return Math.max(72, 176 - m*0.05); }      // base gap width; build() jitters it
-const GAPVAR=.32;       // per-row jitter, ±32%: rare tight gaps, rare wide ones
+function gapWidth(m){ return Math.max(100, 190 - m*0.05); }     // base gap width; build() jitters it. Ball is 26px
+const GAPVAR=.25;       // per-row jitter, ±25%: rare tight gaps, rare wide ones
+// reachability: every ledge must be physically possible. The next gap may sit no further sideways
+// than a thumb covers in (time between ledges − reaction). REACT is the allowance, HSPEED the thumb.
+const REACT=.2, HSPEED=520;
+function reach(m){ return Math.max(50,(rowGap(m)/vmax(m)-REACT)*HSPEED); }
+let lastGx=null;
 // crusher as a fraction of terminal velocity: 55% at the top, 90% by ~875m. Falling clean ALWAYS
 // outruns it; only stalls close the distance. This ratio is the suspense variable — tune it last.
 function crusherSpeed(m){ return vmax(m)*Math.min(.9, .55 + m*0.0004); }
 
 function reset(){
   P={x:W/2,y:0,vx:0,vy:0,stun:0};
-  rows=[];coinsArr=[];bits=[];
+  rows=[];coinsArr=[];bits=[];lastGx=null;
   crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;banked=0;
   for(let i=0,y=0;i<10;i++){ y+=rowGap(y/PPM); build(y); }
 }
 function build(y){
-  const m=y/PPM, gw=gapWidth(m)*(1+(Math.random()*2-1)*GAPVAR), edge=gw/2+16;
-  const gx=edge+Math.random()*(W-edge*2);
+  const m=y/PPM, gw=gapWidth(m)*(1+(Math.random()*2-1)*GAPVAR), edge=gw/2+40;   // 40: gaps never hug the wall
+  const rc=reach(m), c=lastGx??W/2, lo=Math.max(edge,c-rc), hi=Math.min(W-edge,c+rc);
+  const gx=lo+Math.random()*Math.max(0,hi-lo); lastGx=gx;
   rows.push({y,gx,gw,hit:false});
   // coins sit in the gap and just past it — reward for threading cleanly
   const n=1+(Math.random()<.45?1:0)+(m>400&&Math.random()<.3?1:0);
