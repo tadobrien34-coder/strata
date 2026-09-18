@@ -96,15 +96,25 @@ Implemented:
 ```
 PPM   = 6      pixels per metre
 ROW   = 215    vertical spacing of ledges   (was 190; raised 18 Sep on feel)
-GRAV  = 1500
+GRAV  = 950    (was 1500; ~0.7s from a stall back to VMAX, so a graze costs real slack)
 VMAX  = 760    terminal velocity
-STEER = 22     lerp rate toward pointer     (was 17; raised 18 Sep on feel)
-KEYSPD= 520    px/s for arrow keys         (was 430)
+STEER = 28     lerp rate toward pointer     (was 17, then 22; raised on feel)
+KEYSPD= 680    px/s for arrow keys         (was 430, then 520)
 R     = 13     player radius
+GAPVAR= .32    per-row gap jitter, ±32%
+GRAZE = .35    see below
 
-gapWidth(m)     = max(66, 152 - m*0.055)
+gapWidth(m)     = max(72, 176 - m*0.05) × (1 ± GAPVAR)
 crusherSpeed(m) = 330 + m*0.34
 ```
+
+**Ledge hits since 18 Sep: graze or die.** Tad wanted hits rarer and more
+punishing. Pure lethal ledges would have retired the crusher (nothing would
+ever cost slack), so the compromise is a graze band: if the ball's centre is
+less than GRAZE×R past the gap edge it stalls as before and the crusher eats
+the slack; deeper than that it dies on the spot ("Shattered"). GRAZE=0 makes
+every hit lethal. After a revive there is a 1.2s grace where solid hits only
+stall, because the next ledge is 0.7s away.
 
 **The crusher-to-VMAX relationship is the game.** 330 + 0.34/m against a
 terminal velocity of 760 means you always have slack for one mistake and
