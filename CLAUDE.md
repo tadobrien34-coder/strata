@@ -105,16 +105,17 @@ KEYSPD= 680    px/s for arrow keys         (was 430)
 R     = 13     player radius
 GAPVAR= .32    per-row gap jitter, ±32%
 
-vmax(m)         = min(720, 470 + m*0.3)          terminal velocity
-rowGap(m)       = max(230, 340 - m*0.14)         ledge spacing
+vmax(m)         = min(780, 470 + m*0.3)          terminal velocity
+rowGap(m)       = 340                            ledge spacing, flat (Tad: speed is the ramp, not density)
 gapWidth(m)     = max(72, 176 - m*0.05) × (1 ± GAPVAR)
 crusherSpeed(m) = vmax(m) × min(.9, .55 + m*0.0004)
 ```
 
-Reaction time per ledge (rowGap/vmax): 0.72s at the top, 0.32s from ~800m.
+Reaction time per ledge (rowGap/vmax): 0.72s at the top, 0.44s from ~1030m.
 
 **The crusher ratio is the game.** Crusher speed is a *fraction* of terminal
-velocity, 55% at the top rising to 90% by ~875m, so falling clean always
+velocity, 55% at the top rising to 90% by ~875m (ratio unchanged 18 Sep pm; the
+stall-budget figures below predate the flat rowGap and read slightly harsh now), so falling clean always
 outruns it at every depth and only stalls close the distance. Measured 18 Sep
 (sim, 360×640): holding the ball on rock at every ledge from the top survives
 8 stalls / 9s; stalling at one ledge in three reaches ~960m; from 800m on,

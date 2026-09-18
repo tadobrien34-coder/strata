@@ -191,9 +191,9 @@ function buy(s){ if(s.price===undefined||bank<s.price) return false;
 let targetX=null, keyL=false, keyR=false, lastT=0;
 
 // ── difficulty ramp. Everything is a function of metres so a level system can swap these later. ──
-function vmax(m){ return Math.min(720, 470 + m*0.3); }          // terminal velocity: 470 px/s at the top, 720 by ~830m
-function rowGap(m){ return Math.max(230, 340 - m*0.14); }       // ledge spacing: 340px at the top → 230 by ~790m
-                                                                // reaction time per ledge (rowGap/vmax): 0.72s → 0.32s
+function vmax(m){ return Math.min(780, 470 + m*0.3); }          // terminal velocity: 470 px/s at the top, 780 by ~1030m
+function rowGap(m){ return 340; }                               // ledge spacing is flat; speed alone carries the ramp
+                                                                // reaction time per ledge (rowGap/vmax): 0.72s → 0.44s
 function gapWidth(m){ return Math.max(72, 176 - m*0.05); }      // base gap width; build() jitters it
 const GAPVAR=.32;       // per-row jitter, ±32%: rare tight gaps, rare wide ones
 // crusher as a fraction of terminal velocity: 55% at the top, 90% by ~875m. Falling clean ALWAYS
