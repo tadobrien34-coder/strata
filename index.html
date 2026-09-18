@@ -141,8 +141,7 @@ function palette(m){
 
 // ── tuning ───────────────────────────────────────────────────────────────
 const PPM=6;            // pixels per metre
-const ROW=215;          // vertical spacing of ledges
-const GRAV=950, VMAX=760, STEER=28;   // GRAV 950: ~0.7s from a stall back to VMAX, so every graze costs real slack
+const GRAV=950, STEER=28;   // GRAV 950: ~0.7s from a stall back to terminal, so every stall costs real slack
 const KEYSPD=680;       // px/s for arrow keys
 const R=13;             // player radius
 
@@ -191,16 +190,21 @@ function buy(s){ if(s.price===undefined||bank<s.price) return false;
   bank-=s.price; save('strata.bank',bank); owned.add(s.id); save('strata.owned',JSON.stringify([...owned])); return true; }
 let targetX=null, keyL=false, keyR=false, lastT=0;
 
-function gapWidth(m){ return Math.max(72, 176 - m*0.05); }    // base width, narrows with depth; build() jitters it
+// ── difficulty ramp. Everything is a function of metres so a level system can swap these later. ──
+function vmax(m){ return Math.min(720, 470 + m*0.3); }          // terminal velocity: 470 px/s at the top, 720 by ~830m
+function rowGap(m){ return Math.max(230, 340 - m*0.14); }       // ledge spacing: 340px at the top → 230 by ~790m
+                                                                // reaction time per ledge (rowGap/vmax): 0.72s → 0.32s
+function gapWidth(m){ return Math.max(72, 176 - m*0.05); }      // base gap width; build() jitters it
 const GAPVAR=.32;       // per-row jitter, ±32%: rare tight gaps, rare wide ones
-const GRAZE=.35;        // centre less than GRAZE*R past the gap edge = graze (stall). Deeper = death. 0 → every hit kills
-function crusherSpeed(m){ return 330 + m*0.34; }              // VMAX is 760 — slack for one mistake
+// crusher as a fraction of terminal velocity: 55% at the top, 90% by ~875m. Falling clean ALWAYS
+// outruns it; only stalls close the distance. This ratio is the suspense variable — tune it last.
+function crusherSpeed(m){ return vmax(m)*Math.min(.9, .55 + m*0.0004); }
 
 function reset(){
-  P={x:W/2,y:0,vx:0,vy:0,stun:0,grace:0};
+  P={x:W/2,y:0,vx:0,vy:0,stun:0};
   rows=[];coinsArr=[];bits=[];
   crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;banked=0;
-  for(let i=1;i<10;i++) build(i*ROW);
+  for(let i=0,y=0;i<10;i++){ y+=rowGap(y/PPM); build(y); }
 }
 function build(y){
   const m=y/PPM, gw=gapWidth(m)*(1+(Math.random()*2-1)*GAPVAR), edge=gw/2+16;
@@ -285,9 +289,8 @@ function step(dt){
   P.x=Math.max(R,Math.min(W-R,P.x));
 
   // fall
-  P.vy=Math.min(VMAX,P.vy+GRAV*dt);
+  P.vy=Math.min(vmax(depth),P.vy+GRAV*dt);
   if(P.stun>0){P.stun-=dt;P.vy=Math.min(P.vy,110);}
-  if(P.grace>0)P.grace-=dt;
   P.y+=P.vy*dt;
   depth=Math.max(depth,P.y/PPM);
 
@@ -301,16 +304,9 @@ function step(dt){
     if(P.y+R>r.y && P.y-R<r.y+16 && !r.hit){
       // d = how far the centre sits outside the gap; negative means inside it
       const d=Math.max(r.gx-r.gw/2-P.x, P.x-(r.gx+r.gw/2));
-      if(d>-R*.5){
-        r.hit=true;P.y=r.y-R;P.vy=0;streak=0;
-        if(d<R*GRAZE||P.grace>0){   // graze: stall, and the crusher eats the slack. grace = just revived
-          P.stun=.42;shake=13;buzz([18,26,18]);sfx.thud();
-          for(let i=0;i<9;i++)bits.push({x:P.x,y:P.y+R,vx:(Math.random()-.5)*230,vy:-Math.random()*170,l:.5,c:'rock'});
-        }else{           // solid rock: dead
-          shake=24;
-          for(let i=0;i<22;i++)bits.push({x:P.x,y:P.y+R*.6,vx:(Math.random()-.5)*340,vy:-Math.random()*260,l:.7,c:'ball'});
-          return die('ledge');
-        }
+      if(d>-R*.5){   // stall. Ledges never kill; the crusher eats the slack this costs
+        r.hit=true;P.y=r.y-R;P.vy=0;streak=0;P.stun=.42;shake=13;buzz([18,26,18]);sfx.thud();
+        for(let i=0;i<9;i++)bits.push({x:P.x,y:P.y+R,vx:(Math.random()-.5)*230,vy:-Math.random()*170,l:.5,c:'rock'});
       }
     }
   }
@@ -329,19 +325,19 @@ function step(dt){
 
   // stream in / cull
   const deepest=rows[rows.length-1].y;
-  if(deepest-P.y<H*2.2) build(deepest+ROW);
+  if(deepest-P.y<H*2.2) build(deepest+rowGap(deepest/PPM));
   rows=rows.filter(r=>r.y>crusherY-260);
   coinsArr=coinsArr.filter(c=>!c.got&&c.y>crusherY-260);
   if(shake>0)shake*=.86;
 }
 
-function die(cause){
-  running=false;buzz([40,60,110]);sfx.death(); if(cause==='ledge') sfx.thud();
+function die(){
+  running=false;buzz([40,60,110]);sfx.death();
   best=Math.max(best,Math.round(depth)); save('strata.best',best);
   bank+=coins-banked; banked=coins; save('strata.bank',bank);   // banked guards the revive double-count
   fDep.textContent=Math.round(depth);fCoin.textContent=coins;fBest.textContent=best;fBank.textContent=bank;
   revive.style.display=revived?'none':'';
-  const word=cause==='ledge'?'Shattered':'Crushed'; overTitle.textContent=revived?word+' again':word;
+  overTitle.textContent=revived?'Crushed again':'Crushed';
   over.classList.remove('gone');
 }
 
@@ -380,7 +376,7 @@ function draw(){
 
   // debris
   for(const b of bits){cx.globalAlpha=Math.max(0,b.l*2);
-    cx.fillStyle=b.c==='coin'?'#F2C14E':b.c==='ember'?'#FF7A1A':b.c==='ball'?skin.ball:pal.grit;cx.fillRect(b.x,b.y-camY,3,3);}
+    cx.fillStyle=b.c==='coin'?'#F2C14E':b.c==='ember'?'#FF7A1A':pal.grit;cx.fillRect(b.x,b.y-camY,3,3);}
   cx.globalAlpha=1;
 
   // player + trail
@@ -461,7 +457,7 @@ document.getElementById('shopS').onclick=()=>openShop(startVeil);
 document.getElementById('shopO').onclick=()=>openShop(over);
 document.getElementById('shopBack').onclick=closeShop;
 revive.onclick=()=>{ // stand-in for a rewarded-video continue
-  audioInit();revived=true;crusherY=P.y-620;P.vy=0;P.stun=0;P.grace=1.2;   // 1.2s: solid hits only stall
+  audioInit();revived=true;crusherY=P.y-620;P.vy=0;P.stun=0;
   over.classList.add('gone');running=true;buzz([12,40,12]);sfx.revive();
 };
 muteBtn.onclick=()=>{audioInit();setMute(!muted);};

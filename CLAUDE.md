@@ -63,7 +63,7 @@ Reference points: Helix Jump, Doodle Jump (inverted), Downwell.
 ### Current state
 
 Single file, `index.html`. Canvas 2D, no dependencies, no build step.
-Roughly 460 lines. Playable and — per Tad, unprompted — actually fun.
+Roughly 450 lines. Playable and — per Tad, unprompted — actually fun.
 
 Implemented:
 - Procedural strata streaming; rows generate ahead of camera, cull behind crusher
@@ -91,36 +91,40 @@ Implemented:
   `fx:'molten'` cycles colour and sheds embers. Owned set and equipped id
   persist in `localStorage` (`strata.owned`, `strata.skin`).
 
-### Tuning constants — treat as load-bearing
+### Tuning — treat as load-bearing
+
+Everything that ramps is a function of metres (`m`), so a level system can
+swap curves without a rewrite. Reworked 18 Sep after Tad's playtest: the
+old fixed constants put the top of the shaft at end-game pace.
 
 ```
 PPM   = 6      pixels per metre
-ROW   = 215    vertical spacing of ledges   (was 190; raised 18 Sep on feel)
-GRAV  = 950    (was 1500; ~0.7s from a stall back to VMAX, so a graze costs real slack)
-VMAX  = 760    terminal velocity
-STEER = 28     lerp rate toward pointer     (was 17, then 22; raised on feel)
-KEYSPD= 680    px/s for arrow keys         (was 430, then 520)
+GRAV  = 950    (was 1500; ~0.7s from a stall back to terminal)
+STEER = 28     lerp rate toward pointer     (was 17)
+KEYSPD= 680    px/s for arrow keys         (was 430)
 R     = 13     player radius
 GAPVAR= .32    per-row gap jitter, ±32%
-GRAZE = .35    see below
 
+vmax(m)         = min(720, 470 + m*0.3)          terminal velocity
+rowGap(m)       = max(230, 340 - m*0.14)         ledge spacing
 gapWidth(m)     = max(72, 176 - m*0.05) × (1 ± GAPVAR)
-crusherSpeed(m) = 330 + m*0.34
+crusherSpeed(m) = vmax(m) × min(.9, .55 + m*0.0004)
 ```
 
-**Ledge hits since 18 Sep: graze or die.** Tad wanted hits rarer and more
-punishing. Pure lethal ledges would have retired the crusher (nothing would
-ever cost slack), so the compromise is a graze band: if the ball's centre is
-less than GRAZE×R past the gap edge it stalls as before and the crusher eats
-the slack; deeper than that it dies on the spot ("Shattered"). GRAZE=0 makes
-every hit lethal. After a revive there is a 1.2s grace where solid hits only
-stall, because the next ledge is 0.7s away.
+Reaction time per ledge (rowGap/vmax): 0.72s at the top, 0.32s from ~800m.
 
-**The crusher-to-VMAX relationship is the game.** 330 + 0.34/m against a
-terminal velocity of 760 means you always have slack for one mistake and
-rarely for three. That is the suspense variable expressed as a number. It is
-extremely easy to destroy this while "balancing" something else. Tune it last,
-change it alone, and playtest every change on a phone.
+**The crusher ratio is the game.** Crusher speed is a *fraction* of terminal
+velocity, 55% at the top rising to 90% by ~875m, so falling clean always
+outruns it at every depth and only stalls close the distance. Measured 18 Sep
+(sim, 360×640): holding the ball on rock at every ledge from the top survives
+8 stalls / 9s; stalling at one ledge in three reaches ~960m; from 800m on,
+one stall from a standing start is fatal. Tune the ratio last, alone, and
+playtest on a phone.
+
+**Ledges never kill.** Tried lethal ledges for an hour on 18 Sep; Tad
+rejected them and he was right — the crusher has to be the thing that kills,
+or it's decoration. A ledge hit stalls you (vy capped at 110 for 0.42s) and
+the crusher eats the slack.
 
 ---
 
