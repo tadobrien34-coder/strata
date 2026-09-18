@@ -32,7 +32,23 @@
 
   .veil{position:absolute;inset:0;display:grid;place-items:center;pointer-events:auto;
     background:rgba(10,12,20,.82);backdrop-filter:blur(7px);padding:28px;text-align:center}
+  .veil.shop{display:block;overflow-y:auto;padding-top:22px}
   .veil.gone{display:none}
+  .shopHead{display:flex;justify-content:space-between;align-items:center;max-width:420px;margin:0 auto 14px}
+  .shopHead h2{font-size:26px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;max-width:420px;margin:0 auto}
+  .sk{background:rgba(234,230,218,.05);border-radius:12px;padding:12px 4px 9px;cursor:pointer;
+    box-shadow:inset 0 0 0 1px rgba(234,230,218,.1);transition:transform .12s}
+  .sk:active{transform:scale(.95)}
+  .sk.on{box-shadow:inset 0 0 0 2px var(--coin)}
+  .sk.locked{opacity:.4}
+  .sk i{display:block;width:30px;height:30px;border-radius:50%;margin:0 auto 8px;background:var(--c);
+    box-shadow:0 0 0 2px var(--rim,transparent)}
+  .sk.glow i{box-shadow:0 0 14px var(--g),0 0 0 2px var(--rim,transparent)}
+  .sk b{display:block;font-size:10px;letter-spacing:.08em;font-weight:600}
+  .sk span{display:block;font-size:10px;color:var(--dim);margin-top:3px;font-variant-numeric:tabular-nums}
+  .sk .p{color:var(--coin)}
+  .shopHint{margin-top:16px;font-size:11px;color:var(--dim);text-align:center}
   .veil h1{font-size:clamp(38px,13vw,68px);font-weight:600;letter-spacing:-.045em;line-height:.92}
   .veil h2{font-size:34px;font-weight:600;letter-spacing:-.03em}
   .veil p{margin-top:12px;font-size:15px;color:var(--dim);max-width:30ch;line-height:1.5}
@@ -70,8 +86,16 @@
       <p>Steer as you fall. Clip a ledge and you stall — and the crusher above never stalls.</p>
       <div class="stat"><div><b id="sBest">0</b>BEST</div><div><b id="sBank">0</b>BANK</div></div>
       <button id="go">Start falling</button>
+      <button class="ghost" id="shopS">Skins</button>
       <div class="hint">Drag anywhere, or use ← →. Space to start.</div>
     </div>
+  </div>
+
+  <div class="veil shop gone" id="shop">
+    <div class="shopHead"><h2>Skins</h2><div class="purse" style="position:static"><i></i><span id="shopBank">0</span></div></div>
+    <div class="grid" id="grid"></div>
+    <div class="shopHint">Cosmetic only. Depth skins are earned, never sold.</div>
+    <div style="text-align:center"><button class="ghost" id="shopBack">Back</button></div>
   </div>
 
   <div class="veil gone" id="over">
@@ -85,6 +109,7 @@
       </div>
       <button class="gold" id="revive">Keep falling — watch ad</button>
       <button class="ghost" id="again">Drop again</button>
+      <button class="ghost" id="shopO">Skins</button>
     </div>
   </div>
 </div></div>
@@ -126,6 +151,44 @@ let P, rows, coinsArr, bits, crusherY, depth, coins, shake=0, running=false, rev
 const load=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:+v}catch(e){return d}};
 const save=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 let best=load('strata.best',0), bank=load('strata.bank',0), banked=0;
+
+// ── skins: cosmetics only (CLAUDE.md §5). price → bought from the bank; depth → earned by best depth. ──
+// fx: 'glow' = shadow halo; 'molten' = colour cycles + sheds embers. rim = stroke, for dark balls.
+const SKINS=[
+ {id:'bone',    name:'BONE',    ball:'#EAE6DA',trail:'#EAE6DA',price:0},
+ {id:'ash',     name:'ASH',     ball:'#9A9A96',trail:'#9A9A96',price:50},
+ {id:'slate',   name:'SLATE',   ball:'#6B7A8C',trail:'#6B7A8C',price:50},
+ {id:'moss',    name:'MOSS',    ball:'#7A9A3F',trail:'#7A9A3F',price:50},
+ {id:'clay',    name:'CLAY',    ball:'#B5654A',trail:'#B5654A',price:50},
+ {id:'ochre',   name:'OCHRE',   ball:'#C89B3C',trail:'#C89B3C',price:50},
+ {id:'indigo',  name:'INDIGO',  ball:'#5B5FB5',trail:'#5B5FB5',price:50},
+ {id:'plum',    name:'PLUM',    ball:'#8E4A80',trail:'#8E4A80',price:50},
+ {id:'teal',    name:'TEAL',    ball:'#2F8F8A',trail:'#2F8F8A',price:50},
+ {id:'brick',   name:'BRICK',   ball:'#A63D2E',trail:'#A63D2E',price:50},
+ {id:'sand',    name:'SAND',    ball:'#D9C29A',trail:'#D9C29A',price:50},
+ {id:'copper',  name:'COPPER',  ball:'#B87333',trail:'#E8A45C',price:100},
+ {id:'jade',    name:'JADE',    ball:'#3FA37A',trail:'#8FE0B8',price:100},
+ {id:'blood',   name:'BLOOD',   ball:'#8A0F1A',trail:'#E5484D',price:100},
+ {id:'cobalt',  name:'COBALT',  ball:'#1F4FBF',trail:'#6FA0FF',price:100},
+ {id:'ivory',   name:'IVORY',   ball:'#F7F2E4',trail:'#C9B98A',rim:'#8C7A4F',price:100},
+ {id:'ember',   name:'EMBER',   ball:'#FF6B1A',trail:'#FF6B1A',fx:'glow',price:500},
+ {id:'ghost',   name:'GHOST',   ball:'#DDE6FF',trail:'#DDE6FF',fx:'glow',price:500},
+ {id:'venom',   name:'VENOM',   ball:'#7CFF3A',trail:'#7CFF3A',fx:'glow',price:500},
+ {id:'molten',  name:'MOLTEN',  ball:'#FF7A1A',trail:'#FF7A1A',fx:'molten',price:1000},
+ // depth tier: one per band reached, plus one past the core
+ {id:'chalk',   name:'CHALK',   ball:'#C9D1D9',trail:'#C9D1D9',depth:220},
+ {id:'amethyst',name:'AMETHYST',ball:'#9B6BFF',trail:'#9B6BFF',fx:'glow',depth:480},
+ {id:'magma',   name:'MAGMA',   ball:'#FF4E2B',trail:'#FF4E2B',fx:'glow',depth:760},
+ {id:'obsidian',name:'OBSIDIAN',ball:'#141018',trail:'#C4542F',rim:'#C4542F',depth:1080},
+ {id:'void',    name:'VOID',    ball:'#000000',trail:'#EAE6DA',rim:'#EAE6DA',fx:'glow',depth:1500},
+];
+let owned=new Set(['bone']); try{owned=new Set(JSON.parse(localStorage.getItem('strata.owned')||'["bone"]'))}catch(e){}
+const unlocked=s=>s.depth!==undefined ? best>=s.depth : owned.has(s.id);
+let skin=SKINS.find(s=>{try{return s.id===localStorage.getItem('strata.skin')}catch(e){return false}})||SKINS[0];
+if(!unlocked(skin)) skin=SKINS[0];
+function equip(s){ skin=s; save('strata.skin',s.id); }
+function buy(s){ if(s.price===undefined||bank<s.price) return false;
+  bank-=s.price; save('strata.bank',bank); owned.add(s.id); save('strata.owned',JSON.stringify([...owned])); return true; }
 let targetX=null, keyL=false, keyR=false, lastT=0;
 
 function gapWidth(m){ return Math.max(66, 152 - m*0.055); }   // narrows with depth
@@ -250,6 +313,8 @@ function step(dt){
     }
   }
   for(const b of bits){b.l-=dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.vy+=900*dt;}
+  if(skin.fx==='molten'&&P.vy>200&&Math.random()<.5)
+    bits.push({x:P.x+(Math.random()-.5)*R*1.6,y:P.y,vx:(Math.random()-.5)*60,vy:-P.vy*.15,l:.4,c:'ember'});
   bits=bits.filter(b=>b.l>0);
 
   // stream in / cull
@@ -305,16 +370,20 @@ function draw(){
 
   // debris
   for(const b of bits){cx.globalAlpha=Math.max(0,b.l*2);
-    cx.fillStyle=b.c==='coin'?'#F2C14E':pal.grit;cx.fillRect(b.x,b.y-camY,3,3);}
+    cx.fillStyle=b.c==='coin'?'#F2C14E':b.c==='ember'?'#FF7A1A':pal.grit;cx.fillRect(b.x,b.y-camY,3,3);}
   cx.globalAlpha=1;
 
   // player + trail
-  const py=P.y-camY;
-  const g=cx.createLinearGradient(0,py-46,0,py);
-  g.addColorStop(0,'rgba(234,230,218,0)');g.addColorStop(1,'rgba(234,230,218,.28)');
+  const py=P.y-camY, sk=skin;
+  const ballC=sk.fx==='molten'?mix('#FFB300','#FF3D00',(Math.sin(performance.now()/140)+1)/2):sk.ball;
+  const [tr,tg,tb]=hex(sk.trail), g=cx.createLinearGradient(0,py-46,0,py);
+  g.addColorStop(0,`rgba(${tr},${tg},${tb},0)`);g.addColorStop(1,`rgba(${tr},${tg},${tb},.3)`);
   cx.fillStyle=g;cx.fillRect(P.x-4,py-46,8,46);
-  cx.fillStyle='#EAE6DA';cx.beginPath();cx.arc(P.x,py,R,0,7);cx.fill();
-  cx.fillStyle=P.stun>0?'#E5484D':pal.bg;cx.beginPath();cx.arc(P.x,py-2,4.5,0,7);cx.fill();
+  if(sk.fx){cx.shadowBlur=20;cx.shadowColor=sk.rim||ballC;}
+  cx.fillStyle=ballC;cx.beginPath();cx.arc(P.x,py,R,0,7);cx.fill();
+  cx.shadowBlur=0;
+  if(sk.rim){cx.strokeStyle=sk.rim;cx.lineWidth=2;cx.beginPath();cx.arc(P.x,py,R-1,0,7);cx.stroke();}
+  cx.fillStyle=P.stun>0?'#E5484D':(sk.rim||pal.bg);cx.beginPath();cx.arc(P.x,py-2,4.5,0,7);cx.fill();
 
   // crusher
   const cy=crusherY-camY;
@@ -349,10 +418,38 @@ const dep=document.getElementById('dep'),coins_=document.getElementById('coins')
 goBtn.onclick=()=>{audioInit();fit();reset();startVeil.classList.add('gone');running=true;};
 againBtn.onclick=()=>{audioInit();fit();reset();over.classList.add('gone');running=true;};
 addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!shop.classList.contains('gone')) return closeShop();
   if(e.key!==' '&&e.key!=='Enter')return; e.preventDefault();
+  if(!shop.classList.contains('gone')) return;
   if(!startVeil.classList.contains('gone')) goBtn.click();
   else if(!over.classList.contains('gone')) againBtn.click();
 });
+
+// ── shop ──
+const shop=document.getElementById('shop'),grid=document.getElementById('grid'),shopBank=document.getElementById('shopBank');
+let shopFrom=null;
+function openShop(from){ audioInit(); shopFrom=from; from.classList.add('gone'); renderShop(); shop.classList.remove('gone'); }
+function closeShop(){ shop.classList.add('gone'); shopFrom.classList.remove('gone'); sBank.textContent=bank; fBank.textContent=bank; }
+function renderShop(){
+  shopBank.textContent=bank; grid.innerHTML='';
+  for(const s of SKINS){
+    const un=unlocked(s), el=document.createElement('div');
+    el.className='sk'+(s.fx?' glow':'')+(s===skin?' on':'')+(un?'':' locked');
+    el.style.setProperty('--c',s.ball); el.style.setProperty('--g',s.rim||s.ball); if(s.rim) el.style.setProperty('--rim',s.rim);
+    const tag=s===skin?'EQUIPPED':un?'OWNED':s.depth!==undefined?`REACH ${s.depth}m`:`<span class="p">${s.price} coins</span>`;
+    el.innerHTML=`<i></i><b>${s.name}</b><span>${tag}</span>`;
+    el.onclick=()=>{
+      if(un){ equip(s); sfx.revive(); }
+      else if(buy(s)){ equip(s); sfx.coin(); }
+      else { sfx.thud(); return; }
+      renderShop();
+    };
+    grid.appendChild(el);
+  }
+}
+document.getElementById('shopS').onclick=()=>openShop(startVeil);
+document.getElementById('shopO').onclick=()=>openShop(over);
+document.getElementById('shopBack').onclick=closeShop;
 revive.onclick=()=>{ // stand-in for a rewarded-video continue
   audioInit();revived=true;crusherY=P.y-620;P.vy=0;P.stun=0;
   over.classList.add('gone');running=true;buzz([12,40,12]);sfx.revive();

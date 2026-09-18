@@ -63,7 +63,7 @@ Reference points: Helix Jump, Doodle Jump (inverted), Downwell.
 ### Current state
 
 Single file, `index.html`. Canvas 2D, no dependencies, no build step.
-Roughly 340 lines. Playable and — per Tad, unprompted — actually fun.
+Roughly 460 lines. Playable and — per Tad, unprompted — actually fun.
 
 Implemented:
 - Procedural strata streaming; rows generate ahead of camera, cull behind crusher
@@ -84,6 +84,12 @@ Implemented:
   blip was rejected as too blippy. Confirmed working on Tad's iPhone.
 - Space or Enter starts and restarts
 - Coin bank: total coins across runs, shown on the start and death screens
+- Skins shop (18 Sep): 25 ball skins in a `SKINS` array. 19 purchasable at
+  Tad's tiers (10×50, 5×100, 3×500, 1×1000 coins) and 5 earned by best depth
+  (220/480/760/1080/1500m), which are never sold. Skins set ball and trail
+  colour; `rim` adds a stroke for dark balls; `fx:'glow'` adds a halo;
+  `fx:'molten'` cycles colour and sheds embers. Owned set and equipped id
+  persist in `localStorage` (`strata.owned`, `strata.skin`).
 
 ### Tuning constants — treat as load-bearing
 
@@ -158,7 +164,14 @@ borrowed device before committing to a native rewrite.
 4. **Capacitor wrap + native haptics.** Capacitor's Haptics plugin calls
    Apple's real feedback generators, so the existing canvas game gets genuine
    iOS haptics without a Unity rewrite.
-5. **Customization.** Cosmetics only.
+5. **Customization.** Cosmetics only. Ball skins shipped 18 Sep. Themes
+   (alternate band palettes) and trails are the obvious next cosmetics.
+6. **Leaderboards, once public.** Daily and monthly. Cheapest compliant path
+   is Game Center via a Capacitor plugin: Apple holds the identity, no server
+   to run, no PII stored by us, which keeps the COPPA / age-law profile clean.
+   A self-hosted board means accounts, moderation of names, and a privacy
+   policy that actually says something. Decide when the App Store build
+   exists, not before.
 
 **Building on Windows:** Xcode is macOS-only and Apple requires its
 certificates for signing. Route around it with a cloud CI service —
