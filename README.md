@@ -8,5 +8,6 @@ A one-thumb dropper. Fall down a shaft, thread the gaps in the rock, and outrun 
 - Endless mode with a difficulty curve: terminal velocity rises with depth; every ledge is reachable by construction.
 - 25 ball skins, bought with coins or earned by depth. Cosmetic only.
 - Installs to the home screen and plays offline.
+- Collects no data: no accounts, analytics, ads, cookies or third-party code. See `privacy.html` and `terms.html`.
 
 Single `index.html`, canvas 2D, Web Audio synthesis, no dependencies, no build step. Serve the folder with any static server to run locally.

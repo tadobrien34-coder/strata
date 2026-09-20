@@ -1,6 +1,6 @@
 // Offline support. Network-first so updates land immediately; cache is the fallback for no signal.
-const V='strata-v1';
-const ASSETS=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png','./icon-180.png'];
+const V='strata-v2';
+const ASSETS=['./','./index.html','./privacy.html','./terms.html','./manifest.json','./icon-192.png','./icon-512.png','./icon-180.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(V).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()));
 });

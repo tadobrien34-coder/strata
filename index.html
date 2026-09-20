@@ -49,11 +49,12 @@
   .shopHead{display:flex;justify-content:space-between;align-items:center;max-width:420px;margin:0 auto 14px}
   .shopHead h2{font-size:26px}
   .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;max-width:420px;margin:0 auto}
-  .sk{background:rgba(234,230,218,.05);border-radius:12px;padding:12px 4px 9px;cursor:pointer;
+  .sk{background:rgba(234,230,218,.05);border-radius:12px;padding:12px 4px 9px;cursor:pointer;margin:0;
+    color:var(--bone);font:inherit;width:100%;
     box-shadow:inset 0 0 0 1px rgba(234,230,218,.1);transition:transform .12s}
   .sk:active{transform:scale(.95)}
   .sk.on{box-shadow:inset 0 0 0 2px var(--coin)}
-  .sk.locked{opacity:.4}
+  .sk.locked i{opacity:.4}   /* dim the swatch, not the text: locked labels stay readable */
   .sk i{display:block;width:30px;height:30px;border-radius:50%;margin:0 auto 8px;background:var(--c);
     box-shadow:0 0 0 2px var(--rim,transparent)}
   .sk.glow i{box-shadow:0 0 14px var(--g),0 0 0 2px var(--rim,transparent)}
@@ -80,6 +81,11 @@
   .vol{margin-top:18px;display:flex;gap:18px;justify-content:center}
   .vol label{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10px;letter-spacing:.1em;color:var(--dim)}
   .vol input{width:110px;accent-color:var(--coin);cursor:pointer}
+  .legal{margin-top:18px;font-size:11px;letter-spacing:.06em;color:var(--dim)}
+  .legal a{color:var(--dim);text-decoration:underline;text-underline-offset:3px}
+  .legal a:hover,.legal a:focus-visible{color:var(--coin)}
+  .legal button{all:unset;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+  .legal button:hover,.legal button:focus-visible{color:var(--coin);outline:2px solid var(--coin);outline-offset:3px}
   .mute{position:absolute;bottom:16px;right:16px;pointer-events:auto;margin:0;padding:8px 12px;
     font-size:11px;letter-spacing:.08em;font-weight:500;background:transparent;color:var(--dim);
     box-shadow:inset 0 0 0 1px rgba(234,230,218,.25)}
@@ -92,10 +98,10 @@
 </style>
 
 <div id="stage"><div id="frame">
-  <canvas id="c"></canvas>
+  <canvas id="c" role="img" aria-label="Game view: a ball falling down a rock shaft, steering through gaps in the ledges while a crusher descends from above"></canvas>
   <div class="hud">
     <div class="depth"><b id="dep">0</b><span>metres down</span></div>
-    <div class="purse"><i></i><span id="coins">0</span></div>
+    <div class="purse" aria-label="coins this run"><i aria-hidden="true"></i><span id="coins">0</span></div>
     <div class="bandname" id="band"></div>
     <button class="mute" id="muteBtn" aria-pressed="false">SOUND ON</button>
     <button class="mute left" id="haptBtn" aria-pressed="false">HAPTICS ON</button>
@@ -113,11 +119,12 @@
         <label>SOUND<input type="range" id="sfxVol" min="0" max="100" step="5"></label>
       </div>
       <div class="hint">Drag anywhere, or use ← →. Space to start.</div>
+      <div class="legal"><a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <button type="button" id="resetAll">Reset all data</button></div>
     </div>
   </div>
 
   <div class="veil shop gone" id="shop">
-    <div class="shopHead"><h2>Skins</h2><div class="purse" style="position:static"><i></i><span id="shopBank">0</span></div></div>
+    <div class="shopHead"><h2>Skins</h2><div class="purse" style="position:static" aria-label="coin bank"><i aria-hidden="true"></i><span id="shopBank">0</span></div></div>
     <div class="grid" id="grid"></div>
     <div class="shopHint">Cosmetic only. Depth skins are earned, never sold.</div>
     <div style="text-align:center"><button class="ghost" id="shopBack">Back</button></div>
@@ -366,8 +373,8 @@ const sfx={
     drone.gain.cancelScheduledValues(AC.currentTime); drone.gain.setTargetAtTime(0,AC.currentTime,.05); },
   revive(){ if(!AC)return; tone('sine',330,660,.22,.2); },
 };
-function setMute(m){
-  muted=m; try{localStorage.setItem('strata.mute',m?'1':'0')}catch(e){}
+function setMute(m,persist=true){
+  muted=m; if(persist) save('strata.mute',m?'1':'0');
   if(master) master.gain.setTargetAtTime(m?0:1,AC.currentTime,.02);
   muteBtn.textContent=m?'SOUND OFF':'SOUND ON'; muteBtn.setAttribute('aria-pressed',m);
 }
@@ -553,16 +560,17 @@ addEventListener('keydown',e=>{
 // ── shop ──
 const shop=document.getElementById('shop'),grid=document.getElementById('grid'),shopBank=document.getElementById('shopBank');
 let shopFrom=null;
-function openShop(from){ audioInit(); shopFrom=from; from.classList.add('gone'); renderShop(); shop.classList.remove('gone'); }
-function closeShop(){ shop.classList.add('gone'); shopFrom.classList.remove('gone'); sBank.textContent=bank; fBank.textContent=bank; sDaily.textContent=dailyBest; }
+function openShop(from){ audioInit(); shopFrom=from; from.classList.add('gone'); renderShop(); shop.classList.remove('gone'); (grid.querySelector('.on')||grid.firstChild).focus(); }
+function closeShop(){ shop.classList.add('gone'); shopFrom.classList.remove('gone'); sBank.textContent=bank; fBank.textContent=bank; sDaily.textContent=dailyBest; (shopFrom===over?shopO:shopS).focus(); }
 function renderShop(){
   shopBank.textContent=bank; grid.innerHTML='';
   for(const s of SKINS){
-    const un=unlocked(s), el=document.createElement('div');
+    const un=unlocked(s), el=document.createElement('button'); el.type='button';
     el.className='sk'+(s.fx?' glow':'')+(s===skin?' on':'')+(un?'':' locked');
     el.style.setProperty('--c',s.ball); el.style.setProperty('--g',s.rim||s.ball); if(s.rim) el.style.setProperty('--rim',s.rim);
     const tag=s===skin?'EQUIPPED':un?'OWNED':s.depth!==undefined?`REACH ${s.depth}m`:`<span class="p">${s.price} coins</span>`;
-    el.innerHTML=`<i></i><b>${s.name}</b><span>${tag}</span>`;
+    el.innerHTML=`<i aria-hidden="true"></i><b>${s.name}</b><span>${tag}</span>`;
+    el.setAttribute('aria-pressed',s===skin); el.setAttribute('aria-label',`${s.name}, ${el.querySelector('span').textContent.toLowerCase()}`);
     el.onclick=()=>{
       if(un){ equip(s); sfx.revive(); }
       else if(buy(s)){ equip(s); sfx.coin(); }
@@ -572,8 +580,9 @@ function renderShop(){
     grid.appendChild(el);
   }
 }
-document.getElementById('shopS').onclick=()=>openShop(startVeil);
-document.getElementById('shopO').onclick=()=>openShop(over);
+const shopS=document.getElementById('shopS'), shopO=document.getElementById('shopO');
+shopS.onclick=()=>openShop(startVeil);
+shopO.onclick=()=>openShop(over);
 document.getElementById('shopBack').onclick=closeShop;
 revive.onclick=()=>{ // stand-in for a rewarded-video continue
   // free continue, once per run. A rewarded-video SDK plugs in here when there is one.
@@ -581,7 +590,7 @@ revive.onclick=()=>{ // stand-in for a rewarded-video continue
   over.classList.add('gone');running=true;buzz([12,40,12]);sfx.revive();
 };
 muteBtn.onclick=()=>{audioInit();setMute(!muted);};
-function setHaptics(h){ haptics=h; save('strata.haptics',h?'1':'0'); haptBtn.textContent=h?'HAPTICS ON':'HAPTICS OFF'; haptBtn.setAttribute('aria-pressed',h); }
+function setHaptics(h,persist=true){ haptics=h; if(persist) save('strata.haptics',h?'1':'0'); haptBtn.textContent=h?'HAPTICS ON':'HAPTICS OFF'; haptBtn.setAttribute('aria-pressed',h); }
 haptBtn.onclick=()=>{setHaptics(!haptics); if(haptics)buzz(12);};
 if(!navigator.vibrate) haptBtn.hidden=true;
 const musicSl=document.getElementById('musicVol'), sfxSl=document.getElementById('sfxVol');
@@ -589,8 +598,14 @@ musicSl.value=Math.round(musicVol*100); sfxSl.value=Math.round(sfxVol*100);
 musicSl.oninput=()=>{ musicVol=musicSl.value/100; save('strata.musicVol',musicVol); audioInit(); if(music) music.bus.gain.setTargetAtTime(MUSIC_VOL*musicVol,AC.currentTime,.05); };
 sfxSl.oninput=()=>{ sfxVol=sfxSl.value/100; save('strata.sfxVol',sfxVol); audioInit(); if(sfxBus) sfxBus.gain.setTargetAtTime(sfxVol,AC.currentTime,.05); };
 sfxSl.onchange=()=>{ if(AC) sfx.coin(); };   // preview the level
-setMute(muted);setHaptics(haptics);sBest.textContent=best;sBank.textContent=bank;sDaily.textContent=dailyBest;
+setMute(muted,false);setHaptics(haptics,false);sBest.textContent=best;   // reflect stored state without writing it backsBank.textContent=bank;sDaily.textContent=dailyBest;
 document.getElementById('dayNo').textContent=dayNo();
+// data deletion: everything the game stores is under the strata.* prefix on this device
+document.getElementById('resetAll').onclick=()=>{
+  if(!confirm('Erase all Strata data on this device? Best depth, coins, skins and settings will be gone. This cannot be undone.')) return;
+  try{ Object.keys(localStorage).filter(k=>k.startsWith('strata.')).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  location.reload();
+};
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 fit();input();reset();requestAnimationFrame(loop);

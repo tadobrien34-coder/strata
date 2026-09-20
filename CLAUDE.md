@@ -392,7 +392,40 @@ spread.
 
 ---
 
-## 10. Decisions and remaining questions
+## 10. Compliance (19 Sep 2026 audit)
+
+Tad asked for a twenty-point legal/accessibility pass. The game's position is
+that it collects nothing: no accounts, analytics, ads, cookies, purchases,
+emails, third-party code or web fonts. Verified by grep: zero external URLs
+in `index.html`, `sw.js`, `manifest.json`; ten `strata.*` localStorage keys,
+all settings or progress. Don't break this without rewriting the policies.
+
+Shipped: `privacy.html`, `terms.html` (includes refund and cookie sections),
+Privacy · Terms · Reset-all-data footer on the start screen, canvas
+`role="img"` + description, decorative icons `aria-hidden`, shop cards are
+real `<button>`s with `aria-pressed` and labels, focus moves into the shop
+and back out, locked cards dim only the swatch so labels keep 5.2:1
+contrast. Measured contrast: dim text 5.2:1, gold 11.6:1, bone 15.7:1.
+
+**Tad must fill in** the three highlighted placeholders in both legal pages:
+legal/business name, city + state/country, contact email. Governing law is
+the same field. Until then they are drafts.
+
+Not applicable today and why: cookie banner (no cookies, storage is strictly
+functional), form consents (no forms), fake reviews / hidden fees (nothing
+sold, no reviews), unsubscribe (no email), age-of-consent (no data
+collected from anyone), SDK audit (none present), asset licences (icons,
+music and effects are original and generated in this repo; fonts are the
+OS's own). The trademark note in §5 stands: "Strata" is uncleared.
+
+**When ads or IAP arrive, all of this changes:** consent management platform
+for GDPR/ePrivacy, ATT prompt on iOS, an explicit not-child-directed
+declaration to the ad network, COPPA/age-law handling per §5, and both
+legal pages rewritten first.
+
+---
+
+## 11. Decisions and remaining questions
 
 **Structure: endless for now, levels possibly later.** Build the depth curve
 and the daily seeded shaft against an endless model. Don't design anything
