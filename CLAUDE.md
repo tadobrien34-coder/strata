@@ -98,8 +98,12 @@ Implemented:
   `setDanger(0..1)` is driven from the crusher gap every frame: it opens the
   filter, adds 6.5Hz tremolo, fades in a sawtooth a tritone above the root,
   and a heartbeat at ~140bpm. Plinks stop while danger is high. `MUSIC_VOL`
-  is the one knob. Starts with the AudioContext on first tap; the mute
+  is the ceiling. Starts with the AudioContext on first tap; the mute
   button covers it.
+- Volume sliders on the start screen (19 Sep): MUSIC and SOUND, 0–100,
+  persisted as `strata.musicVol` / `strata.sfxVol` (defaults .7 and 1).
+  Effects and the drone go through `sfxBus`, music through its own bus, both
+  under `master`, which the mute button controls.
 - Space or Enter starts and restarts
 - Coin bank: total coins across runs, shown on the start and death screens
 - Skins shop (18 Sep): 25 ball skins in a `SKINS` array. 19 purchasable at

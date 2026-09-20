@@ -77,6 +77,9 @@
   button.gold{background:var(--coin)}
   button:focus-visible{outline:2px solid var(--coin);outline-offset:3px}
   .hint{margin-top:20px;font-size:12px;color:var(--dim)}
+  .vol{margin-top:18px;display:flex;gap:18px;justify-content:center}
+  .vol label{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10px;letter-spacing:.1em;color:var(--dim)}
+  .vol input{width:110px;accent-color:var(--coin);cursor:pointer}
   .mute{position:absolute;bottom:16px;right:16px;pointer-events:auto;margin:0;padding:8px 12px;
     font-size:11px;letter-spacing:.08em;font-weight:500;background:transparent;color:var(--dim);
     box-shadow:inset 0 0 0 1px rgba(234,230,218,.25)}
@@ -105,6 +108,10 @@
       <div class="stat"><div><b id="sBest">0</b>BEST</div><div><b id="sDaily">0</b>TODAY</div><div><b id="sBank">0</b>BANK</div></div>
       <button id="go">Start falling</button>
       <div class="row"><button class="ghost" id="goDaily">Daily #<span id="dayNo">1</span></button><button class="ghost" id="shopS">Skins</button></div>
+      <div class="vol">
+        <label>MUSIC<input type="range" id="musicVol" min="0" max="100" step="5"></label>
+        <label>SOUND<input type="range" id="sfxVol" min="0" max="100" step="5"></label>
+      </div>
       <div class="hint">Drag anywhere, or use ← →. Space to start.</div>
     </div>
   </div>
@@ -262,30 +269,33 @@ const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;   // no sc
 
 // ── audio: Web Audio synthesis, no files. Context is created on the first tap (iOS rule). ──
 // Sound is the one feedback channel that works on iPhone today — see CLAUDE.md §3.
-let AC=null, master=null, drone=null, noiseBuf=null, streak=0;
+let AC=null, master=null, sfxBus=null, drone=null, noiseBuf=null, streak=0;
+// volumes, 0..1, persisted. Mute is separate and sits above both.
+let musicVol=load('strata.musicVol',.7), sfxVol=load('strata.sfxVol',1);
 let muted=false; try{muted=localStorage.getItem('strata.mute')==='1'}catch(e){}
 function audioInit(){
   if(AC){ if(AC.state==='suspended') AC.resume(); return; }
   AC=new (window.AudioContext||window.webkitAudioContext)();
   master=AC.createGain(); master.gain.value=muted?0:1; master.connect(AC.destination);
+  sfxBus=AC.createGain(); sfxBus.gain.value=sfxVol; sfxBus.connect(master);   // effects + drone; music has its own bus
   // one second of white noise, reused for thuds and the death crunch
   noiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);
   const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
   // crusher drone: low saw through a lowpass; step() opens the gain as the crusher closes in
   const o=AC.createOscillator(), f=AC.createBiquadFilter(); drone=AC.createGain();
   o.type='sawtooth'; o.frequency.value=36; f.type='lowpass'; f.frequency.value=110; drone.gain.value=0;
-  o.connect(f); f.connect(drone); drone.connect(master); o.start();
+  o.connect(f); f.connect(drone); drone.connect(sfxBus); o.start();
   musicInit();
 }
 
 // ── music: generative ambient, no files, so nothing to license. A slow four-chord pad with sparse pentatonic
 // plinks. setDanger(0..1) opens the filter, adds tremolo, brings in a tritone against the chord and a heartbeat.
-const MUSIC_VOL=.55;
+const MUSIC_VOL=.55;   // ceiling; the slider scales it
 let music=null;
 const mf=n=>440*Math.pow(2,(n-69)/12);   // midi → Hz
 function musicInit(){
   if(music) return;
-  const bus=AC.createGain(); bus.gain.value=MUSIC_VOL; bus.connect(master);
+  const bus=AC.createGain(); bus.gain.value=MUSIC_VOL*musicVol; bus.connect(master);
   const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=650; lp.Q.value=.6; lp.connect(bus);
   const trem=AC.createGain(); trem.gain.value=1; trem.connect(lp);
   const lfo=AC.createOscillator(); lfo.frequency.value=6.5; const lfoG=AC.createGain(); lfoG.gain.value=0;
@@ -313,7 +323,7 @@ function musicInit(){
     o.type='sine'; o.frequency.setValueAtTime(72,t); o.frequency.exponentialRampToValueAtTime(40,t+.12);
     g.gain.setValueAtTime(.55*music.danger,t); g.gain.exponentialRampToValueAtTime(.001,t+.17);
     o.connect(g); g.connect(bus); o.start(t); o.stop(t+.18); };
-  music={lp,lfoG,triG,danger:0,
+  music={bus,lp,lfoG,triG,danger:0,
     timers:[setInterval(setChord,8000), setInterval(plink,1900), setInterval(beat,430)]};
 }
 function setDanger(d){
@@ -328,14 +338,14 @@ function tone(type,f0,f1,dur,vol){
   const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
   o.type=type; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur);
   g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur);
+  o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t+dur);
 }
 // lowpassed noise burst
 function noise(cut,dur,vol){
   const t=AC.currentTime, s=AC.createBufferSource(), f=AC.createBiquadFilter(), g=AC.createGain();
   s.buffer=noiseBuf; f.type='lowpass'; f.frequency.value=cut;
   g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
-  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur);
+  s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t+dur);
 }
 const sfx={
   // two-note ring, B5 then E6, the second held. Streak nudges the whole thing up a
@@ -347,7 +357,7 @@ const sfx={
       o.frequency.setValueAtTime(988*k*mult,t); o.frequency.setValueAtTime(1319*k*mult,t+.07);
       g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+.005); g.gain.setValueAtTime(vol,t+.07);
       g.gain.exponentialRampToValueAtTime(.001,t+.42);
-      o.connect(g); g.connect(master); o.start(t); o.stop(t+.42);
+      o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t+.42);
     }
   },
   thud(){ if(!AC)return; noise(420,.14,.5); tone('sine',95,42,.16,.45); },
@@ -573,6 +583,11 @@ muteBtn.onclick=()=>{audioInit();setMute(!muted);};
 function setHaptics(h){ haptics=h; save('strata.haptics',h?'1':'0'); haptBtn.textContent=h?'HAPTICS ON':'HAPTICS OFF'; haptBtn.setAttribute('aria-pressed',h); }
 haptBtn.onclick=()=>{setHaptics(!haptics); if(haptics)buzz(12);};
 if(!navigator.vibrate) haptBtn.hidden=true;
+const musicSl=document.getElementById('musicVol'), sfxSl=document.getElementById('sfxVol');
+musicSl.value=Math.round(musicVol*100); sfxSl.value=Math.round(sfxVol*100);
+musicSl.oninput=()=>{ musicVol=musicSl.value/100; save('strata.musicVol',musicVol); audioInit(); if(music) music.bus.gain.setTargetAtTime(MUSIC_VOL*musicVol,AC.currentTime,.05); };
+sfxSl.oninput=()=>{ sfxVol=sfxSl.value/100; save('strata.sfxVol',sfxVol); audioInit(); if(sfxBus) sfxBus.gain.setTargetAtTime(sfxVol,AC.currentTime,.05); };
+sfxSl.onchange=()=>{ if(AC) sfx.coin(); };   // preview the level
 setMute(muted);setHaptics(haptics);sBest.textContent=best;sBank.textContent=bank;sDaily.textContent=dailyBest;
 document.getElementById('dayNo').textContent=dayNo();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
