@@ -130,7 +130,8 @@ vmax(m)         = min(780, 470 + m*0.3)          terminal velocity
 rowGap(m)       = 340                            ledge spacing, flat (Tad: speed is the ramp, not density)
 gapWidth(m)     = max(100, 190 - m*0.05) × (1 ± GAPVAR)   (ball is 26px; gaps sit ≥40px off the walls)
 reach(m)        = max(50, (rowGap/vmax − REACT) × HSPEED)   max sideways shift between consecutive gaps
-crusherSpeed(m) = vmax(m) × min(.9, .55 + m*0.0004)
+crusherSpeed(m) = vmax(m) × min(.82, .55 + m*0.0004)   (cap was .9 until 19 Sep)
+HITWIN = 5     seconds; two ledge hits inside this window = death
 ```
 
 Reaction time per ledge (rowGap/vmax): 0.72s at the top, 0.44s from ~1030m.
@@ -152,10 +153,15 @@ outruns it at every depth and only stalls close the distance. Measured 18 Sep
 one stall from a standing start is fatal. Tune the ratio last, alone, and
 playtest on a phone.
 
-**Ledges never kill.** Tried lethal ledges for an hour on 18 Sep; Tad
-rejected them and he was right — the crusher has to be the thing that kills,
-or it's decoration. A ledge hit stalls you (vy capped at 110 for 0.42s) and
-the crusher eats the slack.
+**Ledges: one hit stalls, two hits inside 5s kills.** Tad's rule, 19 Sep.
+Lethal-on-first-hit was tried 18 Sep and rejected. The 19 Sep version: a hit
+stalls you (vy capped at 110 for 0.42s) and the crusher eats the slack; a
+second hit within `HITWIN` drops the crusher onto you on the spot. The ball's
+eye stays red for the window so the player can see they're on their last
+hit. The crusher cap came down from 90% to 82% of terminal at the same time
+so a lone stall is survivable at every depth (sim: one stall at 1500m from
+terminal leaves ~890px of slack after 6s clean). The crusher still catches
+anyone who stalls repeatedly at >5s spacing deep down, just more slowly.
 
 ---
 

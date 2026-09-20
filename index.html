@@ -232,13 +232,15 @@ function reach(m){ return Math.max(50,(rowGap(m)/vmax(m)-REACT)*HSPEED); }
 let lastGx=null;
 // crusher as a fraction of terminal velocity: 55% at the top, 90% by ~875m. Falling clean ALWAYS
 // outruns it; only stalls close the distance. This ratio is the suspense variable — tune it last.
-function crusherSpeed(m){ return vmax(m)*Math.min(.9, .55 + m*0.0004); }
+function crusherSpeed(m){ return vmax(m)*Math.min(.82, .55 + m*0.0004); }
+const HITWIN=5;         // seconds. Two ledge hits inside this window and the crusher drops on you. One hit only stalls.
+let T=0, lastHit=-1e9;  // game clock and time of the last ledge hit
 
 function reset(isDaily){
   daily=!!isDaily; rng=daily?mulberry(dayNo()*7919+17):Math.random;
   P={x:W/2,y:0,vx:0,vy:0,stun:0};
   rows=[];coinsArr=[];bits=[];lastGx=null;
-  crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;banked=0;
+  crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;banked=0;T=0;lastHit=-1e9;
   for(let i=0,y=0;i<10;i++){ y+=rowGap(y/PPM); build(y); }
 }
 function build(y){
@@ -321,6 +323,7 @@ function input(){
 }
 
 function step(dt){
+  T+=dt;
   // steer
   if(targetX!==null) P.x+=(targetX-P.x)*Math.min(1,dt*STEER);
   if(keyL) P.x-=KEYSPD*dt; if(keyR) P.x+=KEYSPD*dt;
@@ -342,8 +345,10 @@ function step(dt){
     if(P.y+R>r.y && py0-R<r.y+16 && !r.hit){   // swept: py0 is where the ball was, so a fast frame can't tunnel
       // d = how far the centre sits outside the gap; negative means inside it
       const d=Math.max(r.gx-r.gw/2-P.x, P.x-(r.gx+r.gw/2));
-      if(d>-R*.5){   // stall. Ledges never kill; the crusher eats the slack this costs
-        r.hit=true;P.y=r.y-R;P.vy=0;streak=0;P.stun=.42;shake=13;buzz([18,26,18]);sfx.thud();
+      if(d>-R*.5){
+        r.hit=true;P.y=r.y-R;P.vy=0;streak=0;
+        if(T-lastHit<HITWIN){ crusherY=P.y-R; shake=24; return die(); }   // second hit inside the window: crusher slams down
+        lastHit=T;P.stun=.42;shake=13;buzz([18,26,18]);sfx.thud();
         for(let i=0;i<9;i++)bits.push({x:P.x,y:P.y+R,vx:(Math.random()-.5)*230,vy:-Math.random()*170,l:.5,c:'rock'});
       }
     }
@@ -430,7 +435,7 @@ function draw(){
   cx.fillStyle=ballC;cx.beginPath();cx.arc(P.x,py,R,0,7);cx.fill();
   cx.shadowBlur=0;
   if(sk.rim){cx.strokeStyle=sk.rim;cx.lineWidth=2;cx.beginPath();cx.arc(P.x,py,R-1,0,7);cx.stroke();}
-  cx.fillStyle=P.stun>0?'#E5484D':(sk.rim||pal.bg);cx.beginPath();cx.arc(P.x,py-2,4.5,0,7);cx.fill();
+  cx.fillStyle=(P.stun>0||T-lastHit<HITWIN)?'#E5484D':(sk.rim||pal.bg);cx.beginPath();cx.arc(P.x,py-2,4.5,0,7);cx.fill();   // red eye = one more hit kills
 
   // crusher
   const cy=crusherY-camY;
