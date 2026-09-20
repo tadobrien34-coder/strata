@@ -1,6 +1,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Strata — descent prototype</title>
+<title>Strata</title>
+<meta name="description" content="Fall. Thread the gaps. Outrun the crusher. A one-thumb dropper with a daily shaft.">
+<meta name="theme-color" content="#0A0C14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Strata">
+<meta property="og:title" content="Strata">
+<meta property="og:description" content="Fall. Thread the gaps. Outrun the crusher.">
+<meta property="og:image" content="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
   :root{
     --ink:#0A0C14;
@@ -68,6 +80,11 @@
   .mute{position:absolute;bottom:16px;right:16px;pointer-events:auto;margin:0;padding:8px 12px;
     font-size:11px;letter-spacing:.08em;font-weight:500;background:transparent;color:var(--dim);
     box-shadow:inset 0 0 0 1px rgba(234,230,218,.25)}
+  .mute.left{right:auto;left:16px}
+  .tag{margin-top:6px;font-size:11px;letter-spacing:.1em;color:var(--coin)}
+  .tag:empty{display:none}
+  .row{display:flex;gap:10px;justify-content:center}
+  .row button{margin-top:12px}
   @media (prefers-reduced-motion:reduce){button{transition:none}}
 </style>
 
@@ -78,15 +95,16 @@
     <div class="purse"><i></i><span id="coins">0</span></div>
     <div class="bandname" id="band"></div>
     <button class="mute" id="muteBtn" aria-pressed="false">SOUND ON</button>
+    <button class="mute left" id="haptBtn" aria-pressed="false">HAPTICS ON</button>
   </div>
 
   <div class="veil" id="start">
     <div>
       <h1>Strata</h1>
       <p>Steer as you fall. Clip a ledge and you stall — and the crusher above never stalls.</p>
-      <div class="stat"><div><b id="sBest">0</b>BEST</div><div><b id="sBank">0</b>BANK</div></div>
+      <div class="stat"><div><b id="sBest">0</b>BEST</div><div><b id="sDaily">0</b>TODAY</div><div><b id="sBank">0</b>BANK</div></div>
       <button id="go">Start falling</button>
-      <button class="ghost" id="shopS">Skins</button>
+      <div class="row"><button class="ghost" id="goDaily">Daily #<span id="dayNo">1</span></button><button class="ghost" id="shopS">Skins</button></div>
       <div class="hint">Drag anywhere, or use ← →. Space to start.</div>
     </div>
   </div>
@@ -101,14 +119,15 @@
   <div class="veil gone" id="over">
     <div>
       <h2 id="overTitle">Crushed</h2>
+      <div class="tag" id="overTag"></div>
       <div class="stat">
         <div><b id="fDep">0</b>METRES</div>
         <div><b id="fCoin">0</b>COINS</div>
         <div><b id="fBest">0</b>BEST</div>
         <div><b id="fBank">0</b>BANK</div>
       </div>
-      <button class="gold" id="revive">Keep falling — watch ad</button>
-      <button class="ghost" id="again">Drop again</button>
+      <button class="gold" id="revive">Keep falling <small style="opacity:.6;font-weight:500">· once</small></button>
+      <div class="row"><button class="ghost" id="again">Drop again</button><button class="ghost" id="share">Share</button></div>
       <button class="ghost" id="shopO">Skins</button>
     </div>
   </div>
@@ -116,9 +135,11 @@
 
 <script>
 const cv=document.getElementById('c'),cx=cv.getContext('2d');
-let W=0,H=0,DPR=1;
+// Logical width is always 360 so a daily shaft lays out identically on every phone; H follows the aspect.
+let W=360,H=640,DPR=1,SCALE=1;
 function fit(){const r=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2.5);
-  W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;cx.setTransform(DPR,0,0,DPR,0,0);}
+  SCALE=r.width/360||1;W=360;H=r.height/SCALE||640;cv.width=r.width*DPR;cv.height=r.height*DPR;
+  cx.setTransform(DPR*SCALE,0,0,DPR*SCALE,0,0);}
 addEventListener('resize',fit);
 
 // ── strata: each band is a depth range with its own palette ──────────────
@@ -150,6 +171,14 @@ let P, rows, coinsArr, bits, crusherY, depth, coins, shake=0, running=false, rev
 const load=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:+v}catch(e){return d}};
 const save=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 let best=load('strata.best',0), bank=load('strata.bank',0), banked=0;
+
+// ── daily shaft: one seed per calendar day (local), identical layout for everyone. Day 1 = 19 Sep 2026. ──
+const DAY0=Date.UTC(2026,8,19);
+function dayNo(){ const d=new Date(); return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-DAY0)/864e5)+1; }
+function mulberry(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+let rng=Math.random, daily=false;                     // build() draws from rng; everything cosmetic keeps Math.random
+let dailyBest=load('strata.dailyBest',0), dailyDay=load('strata.dailyDay',0);
+if(dailyDay!==dayNo()) dailyBest=0;                   // yesterday's number doesn't carry
 
 // ── skins: cosmetics only (CLAUDE.md §5). price → bought from the bank; depth → earned by best depth. ──
 // fx: 'glow' = shadow halo; 'molten' = colour cycles + sheds embers. rim = stroke, for dark balls.
@@ -205,24 +234,27 @@ let lastGx=null;
 // outruns it; only stalls close the distance. This ratio is the suspense variable — tune it last.
 function crusherSpeed(m){ return vmax(m)*Math.min(.9, .55 + m*0.0004); }
 
-function reset(){
+function reset(isDaily){
+  daily=!!isDaily; rng=daily?mulberry(dayNo()*7919+17):Math.random;
   P={x:W/2,y:0,vx:0,vy:0,stun:0};
   rows=[];coinsArr=[];bits=[];lastGx=null;
   crusherY=-520;depth=0;coins=0;revived=false;shake=0;streak=0;banked=0;
   for(let i=0,y=0;i<10;i++){ y+=rowGap(y/PPM); build(y); }
 }
 function build(y){
-  const m=y/PPM, gw=gapWidth(m)*(1+(Math.random()*2-1)*GAPVAR), edge=gw/2+40;   // 40: gaps never hug the wall
+  const m=y/PPM, gw=gapWidth(m)*(1+(rng()*2-1)*GAPVAR), edge=gw/2+40;   // 40: gaps never hug the wall
   const rc=reach(m), c=lastGx??W/2, lo=Math.max(edge,c-rc), hi=Math.min(W-edge,c+rc);
-  const gx=lo+Math.random()*Math.max(0,hi-lo); lastGx=gx;
+  const gx=lo+rng()*Math.max(0,hi-lo); lastGx=gx;
   rows.push({y,gx,gw,hit:false});
   // coins sit in the gap and just past it — reward for threading cleanly
-  const n=1+(Math.random()<.45?1:0)+(m>400&&Math.random()<.3?1:0);
-  for(let i=0;i<n;i++) coinsArr.push({x:gx+(Math.random()-.5)*gw*.55,y:y+22+i*26,got:false,t:Math.random()*6});
+  const n=1+(rng()<.45?1:0)+(m>400&&rng()<.3?1:0);
+  for(let i=0;i<n;i++) coinsArr.push({x:gx+(rng()-.5)*gw*.55,y:y+22+i*26,got:false,t:Math.random()*6});
 }
 
-// ── haptics: iOS Safari ignores this entirely. See QA notes. ─────────────
-const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
+// ── haptics: iOS Safari ignores this entirely. See QA notes. Toggle persisted; button hidden where unsupported. ──
+let haptics=true; try{haptics=localStorage.getItem('strata.haptics')!=='0'}catch(e){}
+const buzz=p=>{if(!haptics)return;try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;   // no screen shake
 
 // ── audio: Web Audio synthesis, no files. Context is created on the first tap (iOS rule). ──
 // Sound is the one feedback channel that works on iPhone today — see CLAUDE.md §3.
@@ -282,7 +314,7 @@ addEventListener('visibilitychange',()=>{ if(AC&&!document.hidden) AC.resume(); 
 function input(){
   addEventListener('keydown',e=>{if(e.key==='ArrowLeft')keyL=true;if(e.key==='ArrowRight')keyR=true;});
   addEventListener('keyup',e=>{if(e.key==='ArrowLeft')keyL=false;if(e.key==='ArrowRight')keyR=false;});
-  const set=e=>{const r=cv.getBoundingClientRect();targetX=(e.touches?e.touches[0].clientX:e.clientX)-r.left;};
+  const set=e=>{const r=cv.getBoundingClientRect();targetX=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/SCALE;};
   cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);set(e)});
   cv.addEventListener('pointermove',e=>{if(e.pressure>0||e.buttons)set(e)});
   cv.addEventListener('pointerup',()=>targetX=null);
@@ -297,7 +329,7 @@ function step(dt){
   // fall
   P.vy=Math.min(vmax(depth),P.vy+GRAV*dt);
   if(P.stun>0){P.stun-=dt;P.vy=Math.min(P.vy,110);}
-  P.y+=P.vy*dt;
+  const py0=P.y; P.y+=P.vy*dt;
   depth=Math.max(depth,P.y/PPM);
 
   crusherY+=crusherSpeed(depth)*dt;
@@ -307,7 +339,7 @@ function step(dt){
 
   // ledges
   for(const r of rows){
-    if(P.y+R>r.y && P.y-R<r.y+16 && !r.hit){
+    if(P.y+R>r.y && py0-R<r.y+16 && !r.hit){   // swept: py0 is where the ball was, so a fast frame can't tunnel
       // d = how far the centre sits outside the gap; negative means inside it
       const d=Math.max(r.gx-r.gw/2-P.x, P.x-(r.gx+r.gw/2));
       if(d>-R*.5){   // stall. Ledges never kill; the crusher eats the slack this costs
@@ -341,7 +373,10 @@ function die(){
   running=false;buzz([40,60,110]);sfx.death();
   best=Math.max(best,Math.round(depth)); save('strata.best',best);
   bank+=coins-banked; banked=coins; save('strata.bank',bank);   // banked guards the revive double-count
+  if(daily){ dailyDay=dayNo(); dailyBest=Math.max(dailyBest,Math.round(depth)); save('strata.dailyDay',dailyDay); save('strata.dailyBest',dailyBest); }
   fDep.textContent=Math.round(depth);fCoin.textContent=coins;fBest.textContent=best;fBank.textContent=bank;
+  overTag.textContent=daily?`DAILY #${dayNo()} · ${palette(depth).name}`:palette(depth).name;
+  share.textContent='Share';
   revive.style.display=revived?'none':'';
   overTitle.textContent=revived?'Crushed again':'Crushed';
   over.classList.remove('gone');
@@ -349,7 +384,7 @@ function die(){
 
 function draw(){
   const pal=palette(depth), camY=P.y-H*0.38;
-  const sx=(Math.random()-.5)*shake, sy=(Math.random()-.5)*shake;
+  const sx=REDUCED?0:(Math.random()-.5)*shake, sy=REDUCED?0:(Math.random()-.5)*shake;
   cx.save();cx.translate(sx,sy);
   cx.fillStyle=pal.bg;cx.fillRect(-20,-20,W+40,H+40);
 
@@ -425,10 +460,18 @@ const dep=document.getElementById('dep'),coins_=document.getElementById('coins')
       fBest=document.getElementById('fBest'),revive=document.getElementById('revive'),
       overTitle=document.getElementById('overTitle'),muteBtn=document.getElementById('muteBtn'),
       fBank=document.getElementById('fBank'),sBest=document.getElementById('sBest'),sBank=document.getElementById('sBank'),
+      overTag=document.getElementById('overTag'),share=document.getElementById('share'),sDaily=document.getElementById('sDaily'),haptBtn=document.getElementById('haptBtn'),
       startVeil=document.getElementById('start'),goBtn=document.getElementById('go'),againBtn=document.getElementById('again');
 
-goBtn.onclick=()=>{audioInit();fit();reset();startVeil.classList.add('gone');running=true;};
-againBtn.onclick=()=>{audioInit();fit();reset();over.classList.add('gone');running=true;};
+goBtn.onclick=()=>{audioInit();fit();reset(false);startVeil.classList.add('gone');running=true;};
+document.getElementById('goDaily').onclick=()=>{audioInit();fit();reset(true);startVeil.classList.add('gone');running=true;};
+againBtn.onclick=()=>{audioInit();fit();reset(daily);over.classList.add('gone');running=true;};   // replays the same mode
+share.onclick=async()=>{
+  const m=Math.round(depth), text=`Strata${daily?' daily #'+dayNo():''} — ${m}m, ${palette(depth).name}`;
+  const url=location.href.split(/[?#]/)[0];
+  try{ if(navigator.share){ await navigator.share({title:'Strata',text,url}); }
+       else{ await navigator.clipboard.writeText(text+'\n'+url); share.textContent='Copied'; } }catch(e){}
+};
 addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!shop.classList.contains('gone')) return closeShop();
   if(e.key!==' '&&e.key!=='Enter')return; e.preventDefault();
@@ -441,7 +484,7 @@ addEventListener('keydown',e=>{
 const shop=document.getElementById('shop'),grid=document.getElementById('grid'),shopBank=document.getElementById('shopBank');
 let shopFrom=null;
 function openShop(from){ audioInit(); shopFrom=from; from.classList.add('gone'); renderShop(); shop.classList.remove('gone'); }
-function closeShop(){ shop.classList.add('gone'); shopFrom.classList.remove('gone'); sBank.textContent=bank; fBank.textContent=bank; }
+function closeShop(){ shop.classList.add('gone'); shopFrom.classList.remove('gone'); sBank.textContent=bank; fBank.textContent=bank; sDaily.textContent=dailyBest; }
 function renderShop(){
   shopBank.textContent=bank; grid.innerHTML='';
   for(const s of SKINS){
@@ -463,11 +506,17 @@ document.getElementById('shopS').onclick=()=>openShop(startVeil);
 document.getElementById('shopO').onclick=()=>openShop(over);
 document.getElementById('shopBack').onclick=closeShop;
 revive.onclick=()=>{ // stand-in for a rewarded-video continue
+  // free continue, once per run. A rewarded-video SDK plugs in here when there is one.
   audioInit();revived=true;crusherY=P.y-620;P.vy=0;P.stun=0;
   over.classList.add('gone');running=true;buzz([12,40,12]);sfx.revive();
 };
 muteBtn.onclick=()=>{audioInit();setMute(!muted);};
-setMute(muted);sBest.textContent=best;sBank.textContent=bank;
+function setHaptics(h){ haptics=h; save('strata.haptics',h?'1':'0'); haptBtn.textContent=h?'HAPTICS ON':'HAPTICS OFF'; haptBtn.setAttribute('aria-pressed',h); }
+haptBtn.onclick=()=>{setHaptics(!haptics); if(haptics)buzz(12);};
+if(!navigator.vibrate) haptBtn.hidden=true;
+setMute(muted);setHaptics(haptics);sBest.textContent=best;sBank.textContent=bank;sDaily.textContent=dailyBest;
+document.getElementById('dayNo').textContent=dayNo();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 fit();input();reset();requestAnimationFrame(loop);
 </script>

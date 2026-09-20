@@ -62,8 +62,14 @@ Reference points: Helix Jump, Doodle Jump (inverted), Downwell.
 
 ### Current state
 
-Single file, `index.html`. Canvas 2D, no dependencies, no build step.
-Roughly 450 lines. Playable and — per Tad, unprompted — actually fun.
+Web release, 19 Sep 2026. `index.html` (~520 lines) plus `manifest.json`,
+`sw.js` and three icon PNGs. Canvas 2D, no dependencies, no build step.
+Live at https://tadobrien34-coder.github.io/strata/ once Pages is enabled.
+
+**Tad's decision, 19 Sep:** the game is done. He's building a portfolio of
+small apps under one company hoping one sticks; this one is "basically good"
+and he doesn't want to think about it further. Don't propose features. If he
+comes back, it's for the App Store build (§4) or a bug.
 
 Implemented:
 - Procedural strata streaming; rows generate ahead of camera, cull behind crusher
@@ -73,7 +79,9 @@ Implemented:
   different from 50m
 - Coins, debris particles, screen shake, player trail
 - `navigator.vibrate` haptics, deliberately asymmetric
-- Rewarded-continue mock on the death screen, one per run
+- Free continue on the death screen, once per run. Labelled plainly, no ad
+  framing, since there is no ad. The rewarded-video SDK plugs in at
+  `revive.onclick` when there is one.
 - Audio (added 14 Sep 2026): Web Audio synthesis, no files. Coin blip that
   climbs a semitone per coin in a streak (capped at 8, reset by a ledge hit),
   ledge thud (noise + sine), death crunch (noise + descending saw), revive
@@ -90,6 +98,17 @@ Implemented:
   colour; `rim` adds a stroke for dark balls; `fx:'glow'` adds a halo;
   `fx:'molten'` cycles colour and sheds embers. Owned set and equipped id
   persist in `localStorage` (`strata.owned`, `strata.skin`).
+- Daily shaft (19 Sep): one seed per local calendar day, day 1 = 19 Sep 2026,
+  mulberry32 PRNG feeding `build()` only. The canvas has a fixed logical width
+  of 360 (scaled to the frame) so the layout is identical on every phone.
+  Daily best persists for the day (`strata.dailyBest`, `strata.dailyDay`).
+  Death screen shows "DAILY #N · BAND" and a Share button: `navigator.share`
+  on phones, clipboard on desktop. This is §9, and it's built.
+- Swept ledge collision (19 Sep): tests the ball's whole path for the frame.
+- Reduced-motion: no screen shake when the OS asks. Haptics toggle bottom-left,
+  hidden where `navigator.vibrate` doesn't exist (iOS).
+- PWA: manifest, icons, network-first service worker. Installs to the home
+  screen, plays offline, no browser chrome.
 
 ### Tuning — treat as load-bearing
 
@@ -147,11 +166,8 @@ the crusher eats the slack.
   `python3` hit the Store stub. Use the full path:
   `C:\Users\tadob\AppData\Local\Programs\Python\Python312\python.exe -m http.server 8000`
 - **No Node installed yet.** `winget install OpenJS.NodeJS.LTS` when needed
-- Git initialised locally, commits exist
-- GitHub remote is **wrong** — points at `tadobrien34`, real username is
-  `tadobrien34-coder`, and the repo may not exist yet. Fix with
-  `git remote set-url origin https://github.com/tadobrien34-coder/strata.git`
-  after creating an empty private repo. Not blocking anything.
+- Git: `https://github.com/tadobrien34-coder/strata`, public, main branch,
+  deployed by GitHub Pages from main / root.
 - Phone testing: laptop at `192.168.1.216`, phone opens
   `http://192.168.1.216:8000` on the same wifi. Firewall must allow port 8000
   on Private networks.
@@ -325,10 +341,8 @@ Don't let anyone call the current build a product.
   WebView has localStorage, but confirm it survives an app update.
 - No difficulty tuning against real players; gap width and crusher speed are
   guesses and need remote config plus an A/B test
-- No accessibility pass — no colourblind check on the magma band, no
-  reduced-motion handling for screen shake, no haptics toggle
-- Collision is approximate; a fast fall can tunnel through a thin ledge at low
-  frame rates. Needs swept collision before launch.
+- No colourblind check on the magma band. Reduced motion and the haptics
+  toggle are done.
 - No analytics. **Measure session length, D1, and continues-per-run — not
   revenue.** If D1 is under 35% no monetization scheme saves this.
 
@@ -340,6 +354,7 @@ Don't let anyone call the current build a product.
 shareable end card showing depth and band name — "847m, THE CORE" — designed
 to be screenshotted. It's the only feature on any list here that generates
 distribution rather than consuming it, and it costs almost nothing to build.
+**Built 19 Sep.** See §2.
 
 Everything else on the roadmap helps the game retain. This one helps it
 spread.
