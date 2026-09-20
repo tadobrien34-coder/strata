@@ -132,6 +132,7 @@ gapWidth(m)     = max(100, 190 - m*0.05) × (1 ± GAPVAR)   (ball is 26px; gaps 
 reach(m)        = max(50, (rowGap/vmax − REACT) × HSPEED)   max sideways shift between consecutive gaps
 crusherSpeed(m) = vmax(m) × min(.82, .55 + m*0.0004)   (cap was .9 until 19 Sep)
 HITWIN = 5     seconds; two ledge hits inside this window = death
+NEAR   = 60    px; the crusher snaps to this close behind the ball on every hit
 ```
 
 Reaction time per ledge (rowGap/vmax): 0.72s at the top, 0.44s from ~1030m.
@@ -152,6 +153,16 @@ outruns it at every depth and only stalls close the distance. Measured 18 Sep
 8 stalls / 9s; stalling at one ledge in three reaches ~960m; from 800m on,
 one stall from a standing start is fatal. Tune the ratio last, alone, and
 playtest on a phone.
+
+**Every hit is a near-miss.** Tad's reference is Subway Surfers: stumble and
+the cop and dog are right on your heels, then fall back as you run clean. On
+every ledge hit the crusher snaps to NEAR px behind the ball. Inside the hit
+window the crusher's speed is capped at the ball's, so it hovers there through
+the stall and the re-acceleration (~1s at depth) and cannot take you on its
+own; once the ball outruns it the gap opens (sim: 60px at the hit, ~330px
+three seconds later at 800m+, ~510px at the top). The only kill is the second
+hit inside the window. Accumulated slack no longer matters and the crusher's
+own speed only governs how fast it recedes.
 
 **Ledges: one hit stalls, two hits inside 5s kills.** Tad's rule, 19 Sep.
 Lethal-on-first-hit was tried 18 Sep and rejected. The 19 Sep version: a hit
