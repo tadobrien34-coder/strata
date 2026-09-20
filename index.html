@@ -303,7 +303,8 @@ function musicInit(){
   // pad: four voices, each a slightly detuned pair of triangles
   const voices=[];
   for(let i=0;i<4;i++){ const g=AC.createGain(); g.gain.value=0; g.connect(trem);
-    const pair=[-7,7].map(d=>{const o=AC.createOscillator(); o.type='triangle'; o.detune.value=d; o.connect(g); o.start(); return o;});
+    // ±2 cents: ±7 beat at ~2Hz on the low notes, which read as a pulse. This is a slow shimmer instead.
+    const pair=[-2,2].map(d=>{const o=AC.createOscillator(); o.type='triangle'; o.detune.value=d; o.connect(g); o.start(); return o;});
     voices.push({g,pair}); }
   // tension: a saw a tritone above the root, silent until danger
   const tri=AC.createOscillator(); tri.type='sawtooth'; const triG=AC.createGain(); triG.gain.value=0;
