@@ -275,6 +275,53 @@ function audioInit(){
   const o=AC.createOscillator(), f=AC.createBiquadFilter(); drone=AC.createGain();
   o.type='sawtooth'; o.frequency.value=36; f.type='lowpass'; f.frequency.value=110; drone.gain.value=0;
   o.connect(f); f.connect(drone); drone.connect(master); o.start();
+  musicInit();
+}
+
+// ── music: generative ambient, no files, so nothing to license. A slow four-chord pad with sparse pentatonic
+// plinks. setDanger(0..1) opens the filter, adds tremolo, brings in a tritone against the chord and a heartbeat.
+const MUSIC_VOL=.55;
+let music=null;
+const mf=n=>440*Math.pow(2,(n-69)/12);   // midi → Hz
+function musicInit(){
+  if(music) return;
+  const bus=AC.createGain(); bus.gain.value=MUSIC_VOL; bus.connect(master);
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=650; lp.Q.value=.6; lp.connect(bus);
+  const trem=AC.createGain(); trem.gain.value=1; trem.connect(lp);
+  const lfo=AC.createOscillator(); lfo.frequency.value=6.5; const lfoG=AC.createGain(); lfoG.gain.value=0;
+  lfo.connect(lfoG); lfoG.connect(trem.gain); lfo.start();
+  // pad: four voices, each a slightly detuned pair of triangles
+  const voices=[];
+  for(let i=0;i<4;i++){ const g=AC.createGain(); g.gain.value=0; g.connect(trem);
+    const pair=[-7,7].map(d=>{const o=AC.createOscillator(); o.type='triangle'; o.detune.value=d; o.connect(g); o.start(); return o;});
+    voices.push({g,pair}); }
+  // tension: a saw a tritone above the root, silent until danger
+  const tri=AC.createOscillator(); tri.type='sawtooth'; const triG=AC.createGain(); triG.gain.value=0;
+  tri.connect(triG); triG.connect(lp); tri.start();
+  const CHORDS=[[57,64,67,71],[53,60,64,69],[48,55,60,64],[55,62,66,71]];   // Am7 · Fmaj7 · Cmaj7 · G6
+  let chord=0;
+  const setChord=()=>{ const t=AC.currentTime, c=CHORDS[chord++%CHORDS.length];
+    voices.forEach((v,i)=>{ v.pair.forEach(o=>o.frequency.setTargetAtTime(mf(c[i]),t,.9)); v.g.gain.setTargetAtTime(.045,t,1.5); });
+    tri.frequency.setTargetAtTime(mf(c[0]+6),t,.5); };
+  setChord();
+  const PENT=[69,72,74,76,79,81,84];
+  const plink=()=>{ if(!music||music.danger>.4||muted)return; const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.value=mf(PENT[Math.floor(Math.random()*PENT.length)]);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.05,t+.02); g.gain.exponentialRampToValueAtTime(.0005,t+2);
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t+2.1); };
+  const beat=()=>{ if(!music||music.danger<.15)return; const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(72,t); o.frequency.exponentialRampToValueAtTime(40,t+.12);
+    g.gain.setValueAtTime(.55*music.danger,t); g.gain.exponentialRampToValueAtTime(.001,t+.17);
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t+.18); };
+  music={lp,lfoG,triG,danger:0,
+    timers:[setInterval(setChord,8000), setInterval(plink,1900), setInterval(beat,430)]};
+}
+function setDanger(d){
+  if(!music) return; d=Math.max(0,Math.min(1,d)); if(Math.abs(d-music.danger)<.01) return;
+  music.danger=d; const t=AC.currentTime;
+  music.lp.frequency.setTargetAtTime(650+d*2200,t,.25);   // opens up: brighter, harsher
+  music.lfoG.gain.setTargetAtTime(d*.5,t,.25);            // tremolo depth
+  music.triG.gain.setTargetAtTime(d*.03,t,.25);           // the wrong note
 }
 // one oscillator, pitch f0→f1 over dur seconds, exponential fade
 function tone(type,f0,f1,dur,vol){
@@ -295,12 +342,12 @@ const sfx={
   // semitone per coin (cap 6) so a clean run climbs; a ledge hit resets it.
   coin(){ if(!AC)return;
     const k=Math.pow(2,Math.min(streak,6)/12), t=AC.currentTime;
-    for(const [type,vol] of [['square',.05],['sine',.14]]){
-      const o=AC.createOscillator(), g=AC.createGain(); o.type=type;
-      o.frequency.setValueAtTime(988*k,t); o.frequency.setValueAtTime(1319*k,t+.07);
-      g.gain.setValueAtTime(vol,t); g.gain.setValueAtTime(vol,t+.07);
-      g.gain.exponentialRampToValueAtTime(.001,t+.38);
-      o.connect(g); g.connect(master); o.start(t); o.stop(t+.38);
+    for(const [mult,vol] of [[1,.16],[2,.035]]){   // fundamental + a quiet octave; sines only, no buzz
+      const o=AC.createOscillator(), g=AC.createGain(); o.type='sine';
+      o.frequency.setValueAtTime(988*k*mult,t); o.frequency.setValueAtTime(1319*k*mult,t+.07);
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+.005); g.gain.setValueAtTime(vol,t+.07);
+      g.gain.exponentialRampToValueAtTime(.001,t+.42);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t+.42);
     }
   },
   thud(){ if(!AC)return; noise(420,.14,.5); tone('sine',95,42,.16,.45); },
@@ -337,12 +384,15 @@ function step(dt){
   const py0=P.y; P.y+=P.vy*dt;
   depth=Math.max(depth,P.y/PPM);
 
-  // Inside the hit window the crusher never outpaces the ball, so it can't take you on its own — only a
-  // second hit can. Outside the window it runs at its own speed, always below terminal.
-  crusherY+=(T-lastHit<HITWIN?Math.min(crusherSpeed(depth),P.vy):crusherSpeed(depth))*dt;
+  // Crusher. After a hit, while you're slower than it, it rushes in to NEAR px behind you and holds there —
+  // it can't take you on its own, only a second hit can. Once you outrun it, it falls back at its own speed.
+  const cs=crusherSpeed(depth), gap=P.y-crusherY;
+  if(T-lastHit<HITWIN && P.vy<=cs) crusherY+=P.vy*dt+(gap>NEAR?(gap-NEAR)*Math.min(1,dt*12):0);   // rush closes most of the distance in ~0.25s
+  else crusherY+=cs*dt;
   if(P.y-crusherY<R*1.4) return die();
   // drone is silent with full slack, loud in the last ~560px before it eats you
   if(drone){ const prox=Math.max(0,1-(P.y-crusherY)/560); drone.gain.setTargetAtTime(prox*prox*.28,AC.currentTime,.08); }
+  setDanger(1-(P.y-crusherY-NEAR)/420);   // music: 1 with the crusher on your heels, 0 once it's ~420px back
 
   // ledges
   for(const r of rows){
@@ -352,7 +402,7 @@ function step(dt){
       if(d>-R*.5){
         r.hit=true;P.y=r.y-R;P.vy=0;streak=0;
         if(T-lastHit<HITWIN){ crusherY=P.y-R; shake=24; return die(); }   // second hit inside the window: crusher slams down
-        lastHit=T;crusherY=Math.max(crusherY,P.y-NEAR);P.stun=.42;shake=18;buzz([18,26,18]);sfx.thud();
+        lastHit=T;P.stun=.42;shake=18;buzz([18,26,18]);sfx.thud();
         for(let i=0;i<9;i++)bits.push({x:P.x,y:P.y+R,vx:(Math.random()-.5)*230,vy:-Math.random()*170,l:.5,c:'rock'});
       }
     }
@@ -379,7 +429,7 @@ function step(dt){
 }
 
 function die(){
-  running=false;buzz([40,60,110]);sfx.death();
+  running=false;setDanger(0);buzz([40,60,110]);sfx.death();
   best=Math.max(best,Math.round(depth)); save('strata.best',best);
   bank+=coins-banked; banked=coins; save('strata.bank',bank);   // banked guards the revive double-count
   if(daily){ dailyDay=dayNo(); dailyBest=Math.max(dailyBest,Math.round(depth)); save('strata.dailyDay',dailyDay); save('strata.dailyBest',dailyBest); }

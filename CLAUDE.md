@@ -89,7 +89,17 @@ Implemented:
   Mute toggle bottom-right, persisted in `localStorage` under `strata.mute`.
   AudioContext is created on the first button tap (iOS requirement).
   Coin sound is a two-note ring (B5 → E6) since 18 Sep; the original swept
-  blip was rejected as too blippy. Confirmed working on Tad's iPhone.
+  blip was rejected as too blippy, and the square-wave layer was dropped
+  19 Sep as "staticy" — sines only now, with a 5ms attack so it can't click.
+  Confirmed working on Tad's iPhone.
+- Music (19 Sep): generative, in Web Audio, no file — so nothing to license.
+  Four-chord pad (Am7 · Fmaj7 · Cmaj7 · G6, 8s per chord) of detuned
+  triangle pairs through a lowpass, plus a sparse pentatonic plink every ~2s.
+  `setDanger(0..1)` is driven from the crusher gap every frame: it opens the
+  filter, adds 6.5Hz tremolo, fades in a sawtooth a tritone above the root,
+  and a heartbeat at ~140bpm. Plinks stop while danger is high. `MUSIC_VOL`
+  is the one knob. Starts with the AudioContext on first tap; the mute
+  button covers it.
 - Space or Enter starts and restarts
 - Coin bank: total coins across runs, shown on the start and death screens
 - Skins shop (18 Sep): 25 ball skins in a `SKINS` array. 19 purchasable at
@@ -155,11 +165,11 @@ one stall from a standing start is fatal. Tune the ratio last, alone, and
 playtest on a phone.
 
 **Every hit is a near-miss.** Tad's reference is Subway Surfers: stumble and
-the cop and dog are right on your heels, then fall back as you run clean. On
-every ledge hit the crusher snaps to NEAR px behind the ball. Inside the hit
-window the crusher's speed is capped at the ball's, so it hovers there through
-the stall and the re-acceleration (~1s at depth) and cannot take you on its
-own; once the ball outruns it the gap opens (sim: 60px at the hit, ~330px
+the cop and dog are right on your heels, then fall back as you run clean. After
+a ledge hit, while the ball is slower than the crusher, the crusher rushes in
+(exponential approach, most of the distance in ~0.25s) to NEAR px behind the
+ball and holds there through the stall and the re-acceleration (~1s at depth);
+it cannot take you on its own. Once the ball outruns it the gap opens (sim: 60px at the hit, ~330px
 three seconds later at 800m+, ~510px at the top). The only kill is the second
 hit inside the window. Accumulated slack no longer matters and the crusher's
 own speed only governs how fast it recedes.
